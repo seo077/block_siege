@@ -1,0 +1,28 @@
+{
+  "il_version": 1,
+
+  "_code": "Paths that are gated until G0 is approved. Empty means builtin heuristics only (source extensions + manifests). Adding entries NARROWS the gate and takes effect immediately.",
+  "code": [
+    "scripts/**/*.gd",
+    "*.tscn",
+    "project.godot",
+    "export_presets.cfg"
+  ],
+
+  "_always_allow": "Paths exempt from the gate. Builtin exemptions (README, docs/**, **/*.md, .interlocking/**) are always unioned in and cannot be removed — planning must never be blockable. WIDENING this list has no effect until a human runs /il:policy.",
+  "always_allow": [],
+
+  "_gate": "enforce=false turns the G0 block into advisory notes. /il:doctor sets this automatically if the platform cannot support enforcement.",
+  "gate": { "enforce": true },
+
+  "_override": "Bounds on /il:override. It is both the escape hatch and the fast lane for typo-sized work.",
+  "override": { "max_minutes": 20, "max_edits": 25 },
+
+  "_verify": "Commands the verifier subagent is allowed to run. It has no other execution rights.",
+  "verify": { "commands": [] },
+
+  "_verifiers": "Which agent judges which REQ. A REQ tagged [circuit] routes to the circuit verifier; untagged REQs go to default.",
+  "verifiers": {
+    "default": { "type": "subagent", "name": "il-verifier" }
+  }
+}

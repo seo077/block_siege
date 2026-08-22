@@ -1,0 +1,218 @@
+# TASKS — 001-core-combat-economy
+
+<!--
+  APPEND ONLY. When verification fails, add a NEW task and set the original back
+  to `blocked` — never rewrite it. One task = one commit.
+-->
+
+## T-001 Introduce the player-list match model and fixed scenario
+
+- state:    todo
+- covers:   REQ-001, REQ-002
+- depends:  —
+- produces: |
+    scripts/core/block_record.gd
+      class_name BlockRecord
+      static func create(p_id: int, p_owner_id: int, p_location: StringName, p_object_id: int, p_is_ammo: bool = false) -> BlockRecord
+    scripts/core/weapon_state.gd
+      class_name WeaponState
+      static func create(p_id: int, p_owner_id: int, p_kind: StringName, p_structure_block_ids: Array[int], p_ammo_block_id: int) -> WeaponState
+      func can_fire() -> bool
+    scripts/core/player_state.gd
+      class_name PlayerState
+      static func create(p_id: int, p_reserve_block_ids: Array[int], p_fortress_block_ids: Array[int], p_weapons: Array[WeaponState]) -> PlayerState
+      func find_weapon(weapon_id: int) -> WeaponState
+    scripts/core/match_state.gd
+      class_name MatchState
+      static func create_fixed_scenario(player_ids: Array[int] = [1, 2]) -> MatchState
+      static func create_from_players(p_players: Array[PlayerState], p_blocks: Dictionary) -> MatchState
+      func get_player(player_id: int) -> PlayerState
+      func total_block_count() -> int
+      func validate_ledger() -> Dictionary
+    tests/regression_runner.gd
+      func run_requirement(requirement: String) -> bool
+    tests/fixtures/fixed_scenario.gd
+      static func build(player_ids: Array[int] = [1, 2]) -> MatchState
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-001 && godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-002
+
+## T-002 Bind the fixed scenario model to scene bodies
+
+- state:    todo
+- covers:   REQ-001, REQ-002
+- depends:  T-001
+- produces: |
+    scripts/siege_block.gd
+      func setup(p_block_id: int, p_owner_id: int, p_object_id: int, color: Color, frozen_block: bool = false, p_is_ammo: bool = false) -> void
+      func apply_record(record: BlockRecord) -> void
+    scripts/main.gd
+      func create_match(p_player_ids: Array[int] = [1, 2]) -> void
+      func spawn_match_bodies(state: MatchState) -> void
+      func body_for_block(block_id: int) -> SiegeBlock
+      func sync_body_poses_to_model() -> void
+    tests/fixtures/fixed_scenario_scene.gd
+      static func assert_scene_binding(main: Node) -> bool
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-001
+
+## T-003 Implement guarded one-shot firing
+
+- state:    todo
+- covers:   REQ-003, REQ-009
+- depends:  T-001, T-002
+- produces: |
+    scripts/core/match_state.gd
+      func request_fire(player_id: int, weapon_id: int, drag: Vector2) -> Dictionary
+      func can_accept_combat_input() -> bool
+    scripts/main.gd
+      func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool
+      func spawn_projectile(block_id: int, origin: Vector3, impulse: Vector3) -> SiegeBlock
+    tests/fixtures/firing_cases.gd
+      static func cases() -> Array[Dictionary]
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-003
+
+## T-004 Add fixed-tick stability and timeout adjudication
+
+- state:    todo
+- covers:   REQ-004
+- depends:  T-003
+- produces: |
+    scripts/core/resolution_state.gd
+      class_name ResolutionState
+      const MINIMUM_SECONDS := 0.8
+      const QUIET_SECONDS := 0.6
+      const TIMEOUT_SECONDS := 8.0
+      static func begin(shot_block_id: int, target_block_ids: Array[int]) -> ResolutionState
+      func advance_fixed_tick(delta: float, motions: Dictionary) -> StringName
+      func retry() -> void
+    scripts/main.gd
+      func collect_resolution_motion() -> Dictionary
+      func advance_resolution(delta: float) -> void
+    tests/fixtures/stability_cases.gd
+      static func cases() -> Array[Dictionary]
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-004
+
+## T-005 Record per-block baselines and classify collapse
+
+- state:    todo
+- covers:   REQ-005
+- depends:  T-002, T-004
+- produces: |
+    scripts/core/block_record.gd
+      func capture_baseline(p_transform: Transform3D) -> void
+      func is_fallen_at(p_transform: Transform3D, short_edge: float = 0.2) -> bool
+    scripts/core/weapon_state.gd
+      func is_destroyed(blocks: Dictionary, poses: Dictionary) -> bool
+    scripts/core/player_state.gd
+      func is_fortress_destroyed(blocks: Dictionary, poses: Dictionary) -> bool
+    scripts/siege_block.gd
+      func capture_baseline() -> void
+      func is_fallen() -> bool
+    tests/fixtures/collapse_cases.gd
+      static func cases() -> Array[Dictionary]
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-005
+
+## T-006 Apply shot outcomes as one idempotent ledger transaction
+
+- state:    todo
+- covers:   REQ-006, REQ-007
+- depends:  T-001, T-003, T-005
+- produces: |
+    scripts/core/resolution_transaction.gd
+      class_name ResolutionTransaction
+      static func build(state: MatchState, poses: Dictionary) -> ResolutionTransaction
+      func apply(state: MatchState) -> Dictionary
+      func affected_block_ids() -> Array[int]
+    scripts/core/match_state.gd
+      func resolve_shot_once(poses: Dictionary) -> Dictionary
+      func ownership_snapshot() -> Dictionary
+      func validate_ledger() -> Dictionary
+    tests/fixtures/resolution_cases.gd
+      static func cases() -> Array[Dictionary]
+    tests/fixtures/ledger_cases.gd
+      static func cases() -> Array[Dictionary]
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-006 && godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-007
+
+## T-007 Implement ordered turns, fortress victory, and round-20 scoring
+
+- state:    todo
+- covers:   REQ-008
+- depends:  T-001, T-006
+- produces: |
+    scripts/core/match_state.gd
+      func request_end_turn(player_id: int) -> Dictionary
+      func adjudicate_fortress_victory(attacker_id: int, poses: Dictionary) -> Dictionary
+      func adjudicate_round_limit() -> Dictionary
+      func result_snapshot() -> Dictionary
+    tests/fixtures/turn_and_victory_cases.gd
+      static func cases() -> Array[Dictionary]
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-008
+
+## T-008 Preserve and retry timed-out shots exactly once
+
+- state:    todo
+- covers:   REQ-004, REQ-009
+- depends:  T-004, T-006, T-007
+- produces: |
+    scripts/core/resolution_snapshot.gd
+      class_name ResolutionSnapshot
+      static func capture(state: MatchState, poses: Dictionary, motions: Dictionary) -> ResolutionSnapshot
+      func restore_into(state: MatchState) -> Dictionary
+      func equals_runtime(state: MatchState, poses: Dictionary, motions: Dictionary) -> bool
+    scripts/core/match_state.gd
+      func enter_timeout(poses: Dictionary, motions: Dictionary) -> void
+      func retry_timed_out_shot() -> Dictionary
+      func resolution_apply_count() -> int
+    scripts/main.gd
+      func freeze_timeout_bodies() -> void
+      func retry_resolution() -> bool
+    tests/fixtures/retry_cases.gd
+      static func cases() -> Array[Dictionary]
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-009
+
+## T-009 Integrate core state transitions with the playable scene
+
+- state:    todo
+- covers:   REQ-003, REQ-004, REQ-006, REQ-008, REQ-009
+- depends:  T-002, T-003, T-004, T-005, T-006, T-007, T-008
+- produces: |
+    scripts/main.gd
+      func apply_resolution_result(result: Dictionary) -> void
+      func remove_transferred_bodies(block_ids: Array[int]) -> void
+      func end_turn() -> void
+      func set_interaction_enabled(enabled: bool) -> void
+      func current_adjudication_state() -> StringName
+    main.tscn
+      BlockSiege Node3D remains the playable main scene backed by MatchState
+- verify:   godot4 --headless --path . --quit-after 10
+
+## T-010 Expose adjudication and conservation diagnostics in the UI
+
+- state:    todo
+- covers:   REQ-009, REQ-010
+- depends:  T-008, T-009
+- produces: |
+    scripts/main.gd
+      func update_ui(message: String = "") -> void
+      func diagnostic_text() -> String
+      func on_retry_pressed() -> void
+    main.tscn
+      HUD exposes adjudication state, independently counted block total, timeout error, and Retry control
+    tests/fixtures/ui_diagnostics.gd
+      static func assert_diagnostics(main: Node) -> bool
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-010
+
+## T-011 Complete the repeatable headless regression suite
+
+- state:    todo
+- covers:   REQ-001, REQ-003, REQ-004, REQ-005, REQ-006, REQ-007, REQ-008, REQ-009, REQ-010
+- depends:  T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010
+- produces: |
+    tests/regression_runner.gd
+      func parse_arguments(arguments: PackedStringArray) -> Dictionary
+      func run_requirement(requirement: String) -> bool
+      func run_all(repeat_count: int = 1) -> bool
+      func report_failure(requirement: String, fixture: String, detail: String) -> void
+    tests/fixtures/full_regression.gd
+      static func scenarios() -> Array[Dictionary]
+    README.md
+      Documents Godot 4 headless requirement and full-suite commands
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-010 --repeat 2

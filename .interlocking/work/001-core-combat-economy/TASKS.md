@@ -227,3 +227,4 @@
 - 2026-08-24: T-006 done at `a83f6aa`; atomic rollback, idempotent outcomes, and generic conserved-ID ledger passed REQ-006/REQ-007 verification.
 - 2026-08-24: T-007 done at `8155410`; ordered multi-player turns, fortress victory, and round-20 scoring passed REQ-008 verification.
 - 2026-08-24: T-008 done at `af2fee0`; frozen timeout snapshots, repeated retries, and exactly-once eventual resolution passed REQ-009 verification.
+- 2026-08-24: T-009 done at `7e961a8`; playable scene transitions were bound to MatchState and passed smoke plus REQ-001 through REQ-009.

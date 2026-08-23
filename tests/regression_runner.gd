@@ -7,6 +7,9 @@ const Main = preload("res://scripts/main.gd")
 const FiringCases = preload("res://tests/fixtures/firing_cases.gd")
 const StabilityCases = preload("res://tests/fixtures/stability_cases.gd")
 const ResolutionState = preload("res://scripts/core/resolution_state.gd")
+const CollapseCases = preload("res://tests/fixtures/collapse_cases.gd")
+const WeaponState = preload("res://scripts/core/weapon_state.gd")
+const PlayerState = preload("res://scripts/core/player_state.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -27,6 +30,8 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_guarded_firing()
 		"REQ-004":
 			return _verify_fixed_tick_resolution()
+		"REQ-005":
+			return _verify_collapse_classification()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -162,3 +167,41 @@ func _verify_fixed_tick_resolution() -> bool:
 		return false
 	timeout.retry()
 	return timeout.status == &"resolving" and timeout.elapsed == 0.0 and not timeout.retry_available
+
+func _verify_collapse_classification() -> bool:
+	var first := BlockRecord.create(1, 1, &"fortress", 1)
+	var second := BlockRecord.create(2, 1, &"fortress", 1)
+	var first_baseline := Transform3D(Basis.from_euler(Vector3(0.1, 0.2, 0.3)), Vector3(2.0, 3.0, 4.0))
+	var second_baseline := Transform3D(Basis.from_euler(Vector3(-0.2, 0.4, -0.1)), Vector3(-3.0, 1.0, 7.0))
+	first.capture_baseline(first_baseline)
+	second.capture_baseline(second_baseline)
+	for collapse_case in CollapseCases.cases():
+		var pose := first_baseline
+		pose.origin += collapse_case.offset
+		pose.basis = first_baseline.basis * Basis(Vector3.RIGHT, deg_to_rad(collapse_case.degrees))
+		if first.is_fallen_at(pose) != collapse_case.fallen:
+			return false
+	if not second.is_fallen_at(first_baseline):
+		return false
+	if not first.is_fallen_at(second_baseline):
+		return false
+	var blocks := {1: first, 2: second}
+	var poses := {1: first_baseline.translated(Vector3(0.1, 0.0, 0.0)), 2: second_baseline}
+	var player := PlayerState.create(1, [], [1, 2], [])
+	if player.is_fortress_destroyed(blocks, poses):
+		return false
+	poses[2] = second_baseline * Transform3D(Basis(Vector3.UP, deg_to_rad(30.0)), Vector3.ZERO)
+	if not player.is_fortress_destroyed(blocks, poses):
+		return false
+	var ammo := BlockRecord.create(3, 1, &"weapon", 1, true)
+	ammo.capture_baseline(Transform3D.IDENTITY)
+	blocks[3] = ammo
+	poses[1] = first_baseline
+	poses[2] = second_baseline
+	poses[3] = Transform3D(Basis.IDENTITY, Vector3(1.0, 0.0, 0.0))
+	var weapon := WeaponState.create(1, 1, &"catapult", [1, 2], 3)
+	if weapon.is_destroyed(blocks, poses):
+		return false
+	poses[1] = first_baseline.translated(Vector3(0.1, 0.0, 0.0))
+	poses[2] = second_baseline.translated(Vector3(0.1, 0.0, 0.0))
+	return weapon.is_destroyed(blocks, poses)

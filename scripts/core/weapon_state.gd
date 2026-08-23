@@ -19,3 +19,14 @@ static func create(p_id: int, p_owner_id: int, p_kind: StringName, p_structure_b
 
 func can_fire() -> bool:
 	return ammo_block_id >= 0 and not fired_this_turn
+
+func is_destroyed(blocks: Dictionary, poses: Dictionary) -> bool:
+	if structure_block_ids.is_empty():
+		return false
+	for block_id in structure_block_ids:
+		if not blocks.has(block_id) or not poses.has(block_id):
+			return false
+		var block = blocks[block_id]
+		if block == null or not block.is_fallen_at(poses[block_id]):
+			return false
+	return true

@@ -25,3 +25,14 @@ func find_weapon(weapon_id: int) -> WeaponState:
 		if weapon.id == weapon_id:
 			return weapon
 	return null
+
+func is_fortress_destroyed(blocks: Dictionary, poses: Dictionary) -> bool:
+	if fortress_block_ids.is_empty():
+		return false
+	for block_id in fortress_block_ids:
+		if not blocks.has(block_id) or not poses.has(block_id):
+			return false
+		var block = blocks[block_id]
+		if block == null or not block.is_fallen_at(poses[block_id]):
+			return false
+	return true

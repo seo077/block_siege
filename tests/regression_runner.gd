@@ -13,6 +13,7 @@ const PlayerState = preload("res://scripts/core/player_state.gd")
 const ResolutionCases = preload("res://tests/fixtures/resolution_cases.gd")
 const LedgerCases = preload("res://tests/fixtures/ledger_cases.gd")
 const ResolutionTransaction = preload("res://scripts/core/resolution_transaction.gd")
+const TurnAndVictoryCases = preload("res://tests/fixtures/turn_and_victory_cases.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -39,6 +40,8 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_resolution_transaction()
 		"REQ-007":
 			return _verify_ledger_transitions()
+		"REQ-008":
+			return _verify_turns_and_victory()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -300,3 +303,64 @@ func _transaction_snapshot(state) -> Dictionary:
 		"active": [state.active_shot_block_id, state.active_shot_attacker_id, state.active_shot_weapon_id, state.resolving_shot],
 		"resolved": state.resolved_shot_keys.duplicate(true),
 	}
+
+func _verify_turns_and_victory() -> bool:
+	for test_case in TurnAndVictoryCases.cases():
+		match test_case.kind:
+			&"ordered_turns":
+				var ids: Array[int] = []
+				ids.assign(test_case.players)
+				var state = FixedScenario.build(ids)
+				for expected in test_case.expected:
+					if state.round_number != expected[0] or state.active_player_id != expected[1]: return false
+					if expected != test_case.expected[-1] and not state.request_end_turn(state.active_player_id).accepted: return false
+			&"rejected_turns":
+				var state = FixedScenario.build([1, 2, 3])
+				if state.request_end_turn(2).accepted: return false
+				state.resolving_shot = true
+				if state.request_end_turn(1).accepted: return false
+				state.resolving_shot = false
+				state.combat_input_locked = true
+				if state.request_end_turn(1).accepted: return false
+			&"fortress_all", &"fortress_partial":
+				var state = FixedScenario.build([1, 2])
+				var poses := {}
+				for block_id in state.blocks:
+					var block := state.blocks[block_id] as BlockRecord
+					block.capture_baseline(Transform3D.IDENTITY)
+					poses[block_id] = Transform3D.IDENTITY
+				for index in test_case.destroyed:
+					poses[state.players[1].fortress_block_ids[index]] = Transform3D(Basis.IDENTITY, Vector3(0.1, 0.0, 0.0))
+				var before := poses.duplicate(true)
+				var result = state.adjudicate_fortress_victory(1, poses)
+				if result.final != test_case.final or poses != before: return false
+				if result.final:
+					if result.winner_ids != [1] or state.request_end_turn(1).accepted: return false
+					if state.adjudicate_round_limit() != result: return false
+			&"round_boundary":
+				var state = FixedScenario.build([1, 2, 3])
+				state.round_number = 19
+				for player_id in [1, 2, 3]:
+					if not state.request_end_turn(player_id).accepted: return false
+				if state.round_number != 20 or state.result_snapshot().final: return false
+				for player_id in [1, 2]:
+					if not state.request_end_turn(player_id).accepted or state.result_snapshot().final: return false
+				if not state.request_end_turn(3).accepted or state.round_number != 20 or not state.result_snapshot().final: return false
+			&"total_score", &"fortress_score", &"draw_score":
+				var state = _score_state(test_case.totals, test_case.fortress)
+				var result = state.adjudicate_round_limit()
+				if test_case.winner < 0:
+					if result.outcome != &"draw" or not result.winner_ids.is_empty(): return false
+				elif result.outcome != &"victory" or result.winner_ids != [test_case.winner]: return false
+	return true
+
+func _score_state(totals: Array, fortress: Array):
+	var players: Array[PlayerState] = [PlayerState.create(1, [], [], []), PlayerState.create(2, [], [], [])]
+	var score_blocks := {}
+	var next_id := 1
+	for player_index in 2:
+		for index in totals[player_index]:
+			var location: StringName = &"fortress" if index < fortress[player_index] else &"reserve"
+			score_blocks[next_id] = BlockRecord.create(next_id, player_index + 1, location, 0)
+			next_id += 1
+	return load("res://scripts/core/match_state.gd").create_from_players(players, score_blocks)

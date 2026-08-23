@@ -13,6 +13,15 @@ const RESERVE_BLOCK_COUNT := 87
 var players: Array[PlayerState]
 var blocks: Dictionary
 var active_player_id: int
+var round_number := 1
+var match_result: Dictionary = {
+	"final": false,
+	"outcome": &"pending",
+	"winner_ids": [],
+	"reason": &"",
+	"totals": {},
+	"fortress_counts": {},
+}
 var resolving_shot := false
 var combat_input_locked := false
 var active_shot_block_id := -1
@@ -65,7 +74,93 @@ static func create_from_players(p_players: Array[PlayerState], p_blocks: Diction
 	return match_state
 
 func can_accept_combat_input() -> bool:
-	return not combat_input_locked and not resolving_shot and active_player_id >= 0
+	return not combat_input_locked and not resolving_shot and active_player_id >= 0 and not match_result.final
+
+func request_end_turn(player_id: int) -> Dictionary:
+	var rejected := {"accepted": false, "round": round_number, "active_player_id": active_player_id, "result": result_snapshot()}
+	if match_result.final or combat_input_locked or resolving_shot or player_id != active_player_id:
+		return rejected
+	var player_index := -1
+	for index in players.size():
+		if players[index].id == player_id:
+			player_index = index
+			break
+	if player_index < 0:
+		return rejected
+	players[player_index].turn_actions.turn_ended = true
+	if player_index + 1 < players.size():
+		active_player_id = players[player_index + 1].id
+	else:
+		if round_number >= 20:
+			adjudicate_round_limit()
+		else:
+			round_number += 1
+			active_player_id = players[0].id if not players.is_empty() else -1
+	for player in players:
+		player.turn_actions.turn_ended = false
+	return {"accepted": true, "round": round_number, "active_player_id": active_player_id, "result": result_snapshot()}
+
+func adjudicate_fortress_victory(attacker_id: int, poses: Dictionary) -> Dictionary:
+	if match_result.final:
+		return result_snapshot()
+	if get_player(attacker_id) == null:
+		return result_snapshot()
+	for player in players:
+		if player.id != attacker_id and player.is_fortress_destroyed(blocks, poses):
+			_finalize_result(&"victory", [attacker_id], &"fortress", {}, {})
+			break
+	return result_snapshot()
+
+func adjudicate_round_limit() -> Dictionary:
+	if match_result.final:
+		return result_snapshot()
+	var totals := {}
+	var fortress_counts := {}
+	for player in players:
+		totals[player.id] = 0
+		fortress_counts[player.id] = 0
+	for value in blocks.values():
+		var block := value as BlockRecord
+		if totals.has(block.owner_id):
+			totals[block.owner_id] += 1
+			if block.location == &"fortress":
+				fortress_counts[block.owner_id] += 1
+	var leaders := _leaders_for(totals, players.map(func(player): return player.id))
+	if leaders.size() > 1:
+		leaders = _leaders_for(fortress_counts, leaders)
+	if leaders.size() == 1:
+		_finalize_result(&"victory", leaders, &"round_limit", totals, fortress_counts)
+	else:
+		_finalize_result(&"draw", [], &"round_limit", totals, fortress_counts)
+	return result_snapshot()
+
+func result_snapshot() -> Dictionary:
+	return match_result.duplicate(true)
+
+func _leaders_for(scores: Dictionary, candidates: Array) -> Array:
+	var leaders: Array = []
+	var best := -1
+	for player_id in candidates:
+		var score: int = scores.get(player_id, 0)
+		if score > best:
+			best = score
+			leaders = [player_id]
+		elif score == best:
+			leaders.append(player_id)
+	return leaders
+
+func _finalize_result(outcome: StringName, winner_ids: Array, reason: StringName, totals: Dictionary, fortress_counts: Dictionary) -> void:
+	if match_result.final:
+		return
+	match_result = {
+		"final": true,
+		"outcome": outcome,
+		"winner_ids": winner_ids.duplicate(),
+		"reason": reason,
+		"totals": totals.duplicate(),
+		"fortress_counts": fortress_counts.duplicate(),
+	}
+	combat_input_locked = true
 
 func request_fire(player_id: int, weapon_id: int, drag: Vector2) -> Dictionary:
 	var rejected := {"accepted": false}

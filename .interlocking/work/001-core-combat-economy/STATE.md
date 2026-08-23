@@ -5,22 +5,22 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "9cb1ff03"
-next_action: "Initialize Git and make Godot 4 available, then start the approved E1 implementation loop"
+next_action: "Implement T-002: bind the fixed scenario model to scene bodies"
 blocked_on: null
 open_assumptions: []
-last_verified_commit: null
-head_commit: null
-updated_at: "2026-08-23"
+last_verified_commit: "149b54d"
+head_commit: "149b54d"
+updated_at: "2026-08-24"
 ---
 
 # 001-core-combat-economy
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: Epic split accepted; research, interview decisions, threat model, and SPEC.md drafted.
-- Now: Blocked before CRITERIA.md; three fresh packet/delegation attempts were rejected by the interlocking hook.
-- Watch: Godot is not installed in the current shell but headless runtime verification is required before E1 can complete.
-- Watch: This directory is not currently a Git worktree, so task-per-commit execution is unavailable until Git is initialized.
+- Done: G0 approved; Git initialized; local Godot 4.7.2 available; T-001 implemented and verified for REQ-001/REQ-002.
+- Now: T-002 is the next dependency-ready implementation task.
+- Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
+- Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
 ## History
 - 2026-08-23: User selected E1 from the proposed epic decomposition.
@@ -42,3 +42,4 @@ updated_at: "2026-08-23"
 - 2026-08-23: Isolated il-criteria rewrote and cleaned REQ-009 criteria to cover frozen snapshots, timer-only reset, repeated timeout, and exactly-once eventual resolution.
 - 2026-08-23: Independent il-spec-critic reviewed spec 9cb1ff03 and criteria efc636cb and returned READY; G0 awaits human approval.
 - 2026-08-23: Human approved G0 for spec 9cb1ff03 and criteria efc636cb; code edits are unlocked.
+- 2026-08-24: Replaced ACL-broken Git metadata with a fresh repository linked to the preserved commits, confirmed sandbox execution, made local Godot 4.7.2 available, and verified T-001 for REQ-001/REQ-002 at 149b54d.

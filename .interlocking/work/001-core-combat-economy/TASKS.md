@@ -216,3 +216,7 @@
     README.md
       Documents Godot 4 headless requirement and full-suite commands
 - verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-010 --repeat 2
+
+## Execution log
+
+- 2026-08-24: T-001 done at `149b54d`; REQ-001 and REQ-002 headless verification passed with Godot 4.7.2.

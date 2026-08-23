@@ -28,6 +28,10 @@ var camera: Camera3D
 var status_label: Label
 var hint_label: Label
 var debug_label: Label
+var adjudication_label: Label
+var block_total_label: Label
+var timeout_error_label: Label
+var retry_button: Button
 var trajectory: MeshInstance3D
 var match_state: MatchState
 var block_bodies: Dictionary = {}
@@ -225,11 +229,12 @@ func allocate_object_id() -> int:
 
 func create_ui() -> void:
 	var layer := CanvasLayer.new()
+	layer.name = "HUD"
 	add_child(layer)
 	var panel := ColorRect.new()
 	panel.color = Color(0.02, 0.03, 0.04, 0.84)
 	panel.position = Vector2(18, 18)
-	panel.size = Vector2(430, 150)
+	panel.size = Vector2(560, 238)
 	layer.add_child(panel)
 
 	status_label = Label.new()
@@ -245,6 +250,28 @@ func create_ui() -> void:
 	debug_label = Label.new()
 	debug_label.position = Vector2(34, 122)
 	layer.add_child(debug_label)
+
+	adjudication_label = Label.new()
+	adjudication_label.name = "AdjudicationState"
+	adjudication_label.position = Vector2(34, 150)
+	layer.add_child(adjudication_label)
+	block_total_label = Label.new()
+	block_total_label.name = "BlockTotal"
+	block_total_label.position = Vector2(34, 176)
+	layer.add_child(block_total_label)
+	timeout_error_label = Label.new()
+	timeout_error_label.name = "TimeoutError"
+	timeout_error_label.position = Vector2(34, 204)
+	timeout_error_label.add_theme_color_override("font_color", Color("ff8b7d"))
+	layer.add_child(timeout_error_label)
+	retry_button = Button.new()
+	retry_button.name = "RetryButton"
+	retry_button.text = "Retry"
+	retry_button.position = Vector2(466, 194)
+	retry_button.size = Vector2(92, 36)
+	retry_button.pressed.connect(on_retry_pressed)
+	layer.add_child(retry_button)
+	update_ui()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not interaction_enabled or current_adjudication_state() != &"ready":
@@ -340,7 +367,12 @@ func retry_resolution() -> bool:
 	resolution_retry_available = false
 	resolving_shot = true
 	set_interaction_enabled(false)
+	update_ui("Resolution retry started")
 	return true
+
+func on_retry_pressed() -> void:
+	var retried := retry_resolution()
+	update_ui("Resolution retry started" if retried else "Retry unavailable")
 
 func handle_tank_movement(delta: float) -> void:
 	if not interaction_enabled or match_state == null or not match_state.can_accept_combat_input():
@@ -416,6 +448,7 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	resolution_error = &""
 	resolution_retry_available = false
 	set_interaction_enabled(false)
+	update_ui("Physics adjudication in progress")
 	return true
 
 
@@ -611,14 +644,31 @@ func set_camera_for_player(player: int) -> void:
 	camera.position = Vector3(x, 25.0, 25.0)
 	camera.look_at(Vector3(0, 0, 0), Vector3.UP)
 
-func update_ui(message: String) -> void:
+func diagnostic_text() -> String:
+	var state := current_adjudication_state()
+	if match_state == null:
+		return "State: %s\nBlocks: 0/0\nLedger: unavailable" % state
+	var ledger := match_state.validate_ledger()
+	var ledger_text := "valid" if ledger.valid else "invalid (%s)" % "; ".join(ledger.errors)
+	return "State: %s\nBlocks: %d/%d\nLedger: %s" % [state, ledger.unique_count, ledger.expected_count, ledger_text]
+
+func update_ui(message: String = "") -> void:
 	if status_label == null:
 		return
 	status_label.text = "라운드 %d/%d  |  플레이어 %d  |  %s" % [round_number, MAX_ROUNDS, active_player + 1, "투석기" if selected_weapon == 0 else "전차"]
 	debug_label.text = "예비 블럭 P1: %d  P2: %d  |  %s" % [reserve[0], reserve[1], message]
+	var lines := diagnostic_text().split("\n")
+	adjudication_label.text = lines[0]
+	block_total_label.text = "%s  |  %s" % [lines[1], lines[2]]
+	var timed_out := current_adjudication_state() == &"timeout"
+	timeout_error_label.text = "ERROR: Resolution timed out." if timed_out else ""
+	timeout_error_label.visible = timed_out
+	retry_button.visible = timed_out
+	retry_button.disabled = not timed_out or not resolution_retry_available
 
 func show_result(message: String) -> void:
 	set_process_unhandled_input(false)
 	set_physics_process(false)
+	update_ui(message)
 	status_label.text = message
 	debug_label.text = "프로토타입 종료"

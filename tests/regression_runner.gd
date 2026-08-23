@@ -16,6 +16,7 @@ const ResolutionTransaction = preload("res://scripts/core/resolution_transaction
 const TurnAndVictoryCases = preload("res://tests/fixtures/turn_and_victory_cases.gd")
 const RetryCases = preload("res://tests/fixtures/retry_cases.gd")
 const ResolutionSnapshot = preload("res://scripts/core/resolution_snapshot.gd")
+const UiDiagnostics = preload("res://tests/fixtures/ui_diagnostics.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -46,6 +47,8 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_turns_and_victory()
 		"REQ-009":
 			return _verify_timeout_retry()
+		"REQ-010":
+			return _verify_ui_diagnostics()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -83,6 +86,13 @@ func _verify_fixed_scenario() -> bool:
 	var scene_valid := FixedScenarioScene.assert_scene_binding(main)
 	main.free()
 	return scene_valid
+
+func _verify_ui_diagnostics() -> bool:
+	var main := Main.new()
+	root.add_child(main)
+	var passed := UiDiagnostics.assert_diagnostics(main)
+	main.free()
+	return passed
 
 func _verify_player_list_model() -> bool:
 	for ids in [[7, 3], [30, 10, 20], [20, 30, 10]]:

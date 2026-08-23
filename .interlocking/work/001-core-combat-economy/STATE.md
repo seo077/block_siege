@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "9cb1ff03"
-next_action: "Implement T-011: complete the repeatable headless regression suite"
+next_action: "Create and validate the Web export, then run independent acceptance verification"
 blocked_on: null
 open_assumptions: []
-last_verified_commit: "3282af9"
-head_commit: "3282af9"
+last_verified_commit: "2d6b45c"
+head_commit: "2d6b45c"
 updated_at: "2026-08-24"
 ---
 
@@ -17,8 +17,8 @@ updated_at: "2026-08-24"
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: G0 approved; Git and local Godot 4.7.2 available; T-001 through T-010 implemented and criteria-verified, including playable scene and HUD diagnostics.
-- Now: T-011 is the final implementation task before independent verification.
+- Done: G0 approved; T-001 through T-011 implemented; individual REQ checks, full acceptance matrix twice, and scene smoke pass with Godot 4.7.2.
+- Now: Produce a Web build, validate its artifacts, then run independent acceptance verification.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -52,3 +52,4 @@ updated_at: "2026-08-24"
 - 2026-08-24: Implemented T-008 frozen timeout snapshots and exactly-once repeated retry at af2fee0; REQ-009 passed; next is T-009.
 - 2026-08-24: Integrated core combat transitions into the playable scene at 7e961a8; smoke and REQ-001 through REQ-009 passed; next is T-010.
 - 2026-08-24: Added HUD adjudication/conservation diagnostics and timeout Retry at 3282af9; REQ-010 UI fixture passed; next is T-011.
+- 2026-08-24: Completed T-011 repeatable regression suite at 2d6b45c; REQ-001 through REQ-009, aggregate REQ-010 twice, and scene smoke passed; next is Web export and independent verification.

@@ -229,3 +229,4 @@
 - 2026-08-24: T-008 done at `af2fee0`; frozen timeout snapshots, repeated retries, and exactly-once eventual resolution passed REQ-009 verification.
 - 2026-08-24: T-009 done at `7e961a8`; playable scene transitions were bound to MatchState and passed smoke plus REQ-001 through REQ-009.
 - 2026-08-24: T-010 done at `3282af9`; HUD adjudication state, conserved total, timeout error, and Retry control passed REQ-010 UI diagnostics.
+- 2026-08-24: T-011 done at `2d6b45c`; individual REQ checks, aggregate acceptance matrix repeated twice, and scene smoke all passed.

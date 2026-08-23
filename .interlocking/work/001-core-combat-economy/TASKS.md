@@ -225,3 +225,4 @@
 - 2026-08-24: T-004 done at `7b79111`; fixed-tick thresholds, quiet persistence/reset, exact timeout, and retry timers passed REQ-004 verification.
 - 2026-08-24: T-005 done at `448f0f6`; per-block baseline, collapse boundaries, full-destruction, and ammo exclusion passed REQ-005 verification.
 - 2026-08-24: T-006 done at `a83f6aa`; atomic rollback, idempotent outcomes, and generic conserved-ID ledger passed REQ-006/REQ-007 verification.
+- 2026-08-24: T-007 done at `8155410`; ordered multi-player turns, fortress victory, and round-20 scoring passed REQ-008 verification.

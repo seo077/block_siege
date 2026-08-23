@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "9cb1ff03"
-next_action: "Implement T-006: idempotent shot outcome ledger transaction"
+next_action: "Implement T-007: ordered turns, fortress victory, and round-20 scoring"
 blocked_on: null
 open_assumptions: []
-last_verified_commit: "448f0f6"
-head_commit: "448f0f6"
+last_verified_commit: "a83f6aa"
+head_commit: "a83f6aa"
 updated_at: "2026-08-24"
 ---
 
@@ -17,8 +17,8 @@ updated_at: "2026-08-24"
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: G0 approved; Git and local Godot 4.7.2 available; T-001 through T-005 implemented and criteria-verified.
-- Now: T-006 is the next dependency-ready implementation task.
+- Done: G0 approved; Git and local Godot 4.7.2 available; T-001 through T-006 implemented and criteria-verified.
+- Now: T-007 is the next dependency-ready implementation task.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -47,3 +47,4 @@ updated_at: "2026-08-24"
 - 2026-08-24: Implemented T-003 guarded one-shot firing at 30d23ab; fixture-driven REQ-001/002/003 headless verification passed; next is T-004.
 - 2026-08-24: Implemented T-004 fixed-tick stability and timeout adjudication at 7b79111; REQ-004 boundaries and retry timers passed; next is T-005.
 - 2026-08-24: Implemented T-005 per-block baseline and collapse classification at 448f0f6; REQ-005 boundaries and destruction aggregation passed; next is T-006.
+- 2026-08-24: Implemented T-006 atomic idempotent resolution ledger at a83f6aa; REQ-006/007 and rollback/duplicate invariants passed; next is T-007.

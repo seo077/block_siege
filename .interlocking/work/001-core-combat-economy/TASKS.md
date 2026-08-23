@@ -223,3 +223,4 @@
 - 2026-08-24: T-002 done at `106eae4`; fixed-scenario scene binding passed REQ-001 and REQ-002 headless verification.
 - 2026-08-24: T-003 done at `30d23ab`; fixture-driven guarded firing passed REQ-001, REQ-002, and REQ-003 headless verification.
 - 2026-08-24: T-004 done at `7b79111`; fixed-tick thresholds, quiet persistence/reset, exact timeout, and retry timers passed REQ-004 verification.
+- 2026-08-24: T-005 done at `448f0f6`; per-block baseline, collapse boundaries, full-destruction, and ammo exclusion passed REQ-005 verification.

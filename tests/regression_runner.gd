@@ -17,10 +17,17 @@ const TurnAndVictoryCases = preload("res://tests/fixtures/turn_and_victory_cases
 const RetryCases = preload("res://tests/fixtures/retry_cases.gd")
 const ResolutionSnapshot = preload("res://scripts/core/resolution_snapshot.gd")
 const UiDiagnostics = preload("res://tests/fixtures/ui_diagnostics.gd")
+const FullRegression = preload("res://tests/fixtures/full_regression.gd")
 
 func _init() -> void:
-	var requirement := _read_requirement()
-	var passed := run_requirement(requirement)
+	var options := parse_arguments(OS.get_cmdline_user_args())
+	if not options.valid:
+		report_failure("arguments", "command line", options.error)
+		quit(1)
+		return
+	var repeat_count: int = options.repeat
+	var requirement: String = options.requirement
+	var passed := run_all(repeat_count) if options.all else (_run_req010(repeat_count) if requirement == "REQ-010" else run_requirement(requirement))
 	if passed:
 		print("PASS %s" % requirement)
 	else:
@@ -48,17 +55,61 @@ func run_requirement(requirement: String) -> bool:
 		"REQ-009":
 			return _verify_timeout_retry()
 		"REQ-010":
+			return _run_req010(1)
+		"REQ-010-UI":
 			return _verify_ui_diagnostics()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
 
-func _read_requirement() -> String:
-	var arguments := OS.get_cmdline_user_args()
-	var index := arguments.find("--requirement")
-	if index < 0 or index + 1 >= arguments.size():
-		return ""
-	return arguments[index + 1]
+func parse_arguments(arguments: PackedStringArray) -> Dictionary:
+	var result := {"valid": true, "requirement": "", "repeat": 1, "all": false, "error": ""}
+	var index := 0
+	while index < arguments.size():
+		match arguments[index]:
+			"--requirement":
+				if index + 1 >= arguments.size(): return _argument_error(result, "--requirement needs a value")
+				result.requirement = arguments[index + 1]
+				index += 2
+			"--repeat":
+				if index + 1 >= arguments.size() or not arguments[index + 1].is_valid_int() or int(arguments[index + 1]) < 1:
+					return _argument_error(result, "--repeat must be a positive integer")
+				result.repeat = int(arguments[index + 1])
+				index += 2
+			"--all":
+				result.all = true
+				index += 1
+			_:
+				return _argument_error(result, "unknown argument: %s" % arguments[index])
+	if not result.all and result.requirement.is_empty(): return _argument_error(result, "use --requirement REQ-NNN or --all")
+	if result.all and not result.requirement.is_empty(): return _argument_error(result, "--all and --requirement are mutually exclusive")
+	return result
+
+func _argument_error(result: Dictionary, detail: String) -> Dictionary:
+	result.valid = false
+	result.error = detail
+	return result
+
+func run_all(repeat_count: int = 1) -> bool:
+	if repeat_count < 1:
+		report_failure("all", "matrix", "repeat_count must be positive")
+		return false
+	for repetition in range(1, repeat_count + 1):
+		print("REGRESSION repetition %d/%d" % [repetition, repeat_count])
+		for scenario in FullRegression.scenarios():
+			var requirement: String = scenario.requirement
+			var fixture: String = scenario.fixture
+			print("RUN %s [%s]" % [requirement, fixture])
+			if not run_requirement(requirement):
+				report_failure(requirement, fixture, "verifier returned false in repetition %d" % repetition)
+				return false
+	return true
+
+func _run_req010(repeat_count: int) -> bool:
+	return run_all(repeat_count)
+
+func report_failure(requirement, fixture, detail) -> void:
+	push_error("REGRESSION FAILURE requirement=%s fixture=%s detail=%s" % [requirement, fixture, detail])
 
 func _verify_fixed_scenario() -> bool:
 	var first := FixedScenario.build()

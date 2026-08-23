@@ -1,37 +1,62 @@
 # Block Siege — Godot 4 prototype
 
-물리 발사, 완파 판정, 연쇄 파괴, 턴 전환과 20라운드 제한을 먼저 검증하는 브라우저 로컬 2인용 수직 슬라이스입니다. OpenAI Game Builders Seoul 2026 Track 1 출품을 목표로 합니다.
+Block Siege is a local two-player vertical slice covering physical firing, collapse adjudication, chained destruction, turn order, and the round-20 result.
 
-## 실행
+## Run locally
 
-1. Godot 4에서 이 폴더의 `project.godot`을 가져옵니다.
-2. 프로젝트를 실행합니다.
+Open the editor, then press F5:
 
-제출 빌드는 Godot의 `Web` 프리셋으로 내보내며, 결과물은 `build/web/index.html`에 생성합니다.
+```powershell
+.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --editor --path .
+```
 
-현재 개발 환경에는 Godot 실행 파일이 없어 실제 엔진 실행 검증은 아직 수행하지 못했습니다.
+Run the desktop game:
 
-## 조작
+```powershell
+.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --path .
+```
 
-- `1`: 현재 플레이어의 투석기 선택
-- `2`: 현재 플레이어의 전차 선택
-- 마우스 왼쪽 드래그: 방향과 힘을 정해 발사
-- `WASD`: 선택한 전차 이동
-- `Enter`: 턴 종료
+Run one headless requirement:
 
-## 현재 포함된 범위
+```powershell
+.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-001
+```
 
-- 60×30 BL 필드와 양 끝 10×10 BL 진영
-- 플레이어별 요새, 투석기, 전차의 초기 물리 배치
-- 드래그 방향·길이에 따른 블럭 발사
-- 발사 후 물리 안정 대기와 임시 완파 판정
-- 한 해결 구간에서 여러 적 병기의 연쇄 완파 처리
-- 로컬 턴 전환과 20라운드 판정
+Run the complete acceptance matrix twice (REQ-010):
 
-## 다음 구현 범위
+```powershell
+.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-010 --repeat 2
+```
 
-- 스냅 기반 자유 건설·요새 재건 UI
-- 전차의 턴당 10 BL 이동량 제한과 사거리 제한
-- 실제 장전 블럭의 시각화 및 재장전 선택 순서
-- 요새 잔해 회수와 소유권 이전 연출
-- 완파 임계값 디버그 UI 및 물리 수치 튜닝
+Run the full suite directly, or the smoke suite:
+
+```powershell
+.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --all
+.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --quit-after 2
+```
+
+For manual REQ-010 observation, run the desktop game and confirm adjudication status and the independent block total remain visible, and that timeout error/retry controls appear when a shot times out.
+
+## Web export
+
+Install the matching Godot export templates first; export is unavailable without them. This documentation does not assert that a Web build already exists.
+
+```powershell
+.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --export-release Web build/web/index.html
+```
+
+Serve the result over HTTP; do not open `index.html` using a `file://` URL:
+
+```powershell
+python -m http.server 8000 --directory build/web
+```
+
+Open `http://localhost:8000/`.
+
+## Controls
+
+- `1`: select the active player's catapult
+- `2`: select the active player's tank
+- Left-mouse drag: choose firing direction and strength
+- `WASD`: move the selected tank
+- `Enter`: end the turn

@@ -10,6 +10,9 @@ const ResolutionState = preload("res://scripts/core/resolution_state.gd")
 const CollapseCases = preload("res://tests/fixtures/collapse_cases.gd")
 const WeaponState = preload("res://scripts/core/weapon_state.gd")
 const PlayerState = preload("res://scripts/core/player_state.gd")
+const ResolutionCases = preload("res://tests/fixtures/resolution_cases.gd")
+const LedgerCases = preload("res://tests/fixtures/ledger_cases.gd")
+const ResolutionTransaction = preload("res://scripts/core/resolution_transaction.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -32,6 +35,10 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_fixed_tick_resolution()
 		"REQ-005":
 			return _verify_collapse_classification()
+		"REQ-006":
+			return _verify_resolution_transaction()
+		"REQ-007":
+			return _verify_ledger_transitions()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -205,3 +212,91 @@ func _verify_collapse_classification() -> bool:
 	poses[1] = first_baseline.translated(Vector3(0.1, 0.0, 0.0))
 	poses[2] = second_baseline.translated(Vector3(0.1, 0.0, 0.0))
 	return weapon.is_destroyed(blocks, poses)
+
+func _poses_for(state, destroyed_indices: Array) -> Dictionary:
+	var poses := {}
+	for block_id in state.blocks:
+		var block := state.blocks[block_id] as BlockRecord
+		if not block.baseline_ready: block.capture_baseline(Transform3D.IDENTITY)
+		poses[block_id] = block.baseline_transform
+	var defender = state.players[1]
+	for index in destroyed_indices:
+		for block_id in defender.weapons[index].structure_block_ids:
+			poses[block_id] = Transform3D(Basis.IDENTITY, Vector3(0.1, 0.0, 0.0))
+	return poses
+
+func _verify_resolution_transaction() -> bool:
+	for resolution_case in ResolutionCases.cases():
+		var state = FixedScenario.build()
+		var attacker = state.players[0]
+		var defender = state.players[1]
+		var fired_id: int = attacker.weapons[0].ammo_block_id
+		var expected: Array[int] = [fired_id]
+		for index in resolution_case.destroyed_weapon_indices:
+			expected.append_array(defender.weapons[index].structure_block_ids)
+			expected.append(defender.weapons[index].ammo_block_id)
+		if not state.request_fire(attacker.id, attacker.weapons[0].id, Vector2.ONE).accepted: return false
+		var tx = ResolutionTransaction.build(state, _poses_for(state, resolution_case.destroyed_weapon_indices))
+		if resolution_case.kind == &"invalid_plan":
+			attacker.reserve_block_ids.append(attacker.reserve_block_ids[0])
+			var invalid_before := _transaction_snapshot(state)
+			var rejected = tx.apply(state)
+			if rejected.applied or rejected.reason != "ledger_rejected" or invalid_before != _transaction_snapshot(state): return false
+			continue
+		var result = tx.apply(state)
+		if not result.applied or not result.ledger.valid: return false
+		expected.sort()
+		if tx.affected_block_ids() != expected: return false
+		var destination = defender if resolution_case.kind == &"failure" else attacker
+		for block_id in expected:
+			var block := state.blocks[block_id] as BlockRecord
+			if block.owner_id != destination.id or block.location != &"reserve" or not destination.reserve_block_ids.has(block_id): return false
+		if resolution_case.kind == &"single":
+			for block_id in defender.weapons[1].structure_block_ids:
+				if (state.blocks[block_id] as BlockRecord).owner_id != defender.id: return false
+		var before := state.ownership_snapshot()
+		var duplicate = tx.apply(state)
+		if duplicate.applied or duplicate.reason != "duplicate" or before != state.ownership_snapshot(): return false
+	return true
+
+func _verify_ledger_transitions() -> bool:
+	var state = FixedScenario.build()
+	var attacker = state.players[0]
+	var fired := false
+	var tx = null
+	for ledger_case in LedgerCases.cases():
+		match ledger_case.kind:
+			&"fired":
+				fired = state.request_fire(attacker.id, attacker.weapons[0].id, Vector2.ONE).accepted
+			&"resolved":
+				tx = ResolutionTransaction.build(state, _poses_for(state, [0, 1]))
+				if not tx.apply(state).applied: return false
+			&"duplicate":
+				var before := state.ownership_snapshot()
+				if tx.apply(state).applied or before != state.ownership_snapshot(): return false
+			&"duplicate_reference":
+				var duplicate_id: int = attacker.reserve_block_ids[0]
+				attacker.reserve_block_ids.append(duplicate_id)
+				var duplicate_ledger := state.validate_ledger()
+				if duplicate_ledger.valid or duplicate_ledger.duplicate_count != 1: return false
+				attacker.reserve_block_ids.pop_back()
+			_:
+				pass # delete-pending, timeout, and retry do not mutate ownership.
+		var ledger := state.validate_ledger()
+		if not ledger.valid or ledger.block_count != ledger.expected_count or ledger.unique_count != ledger.expected_count or ledger.duplicate_count != 0 or not ledger.missing.is_empty() or not ledger.unknown.is_empty(): return false
+	if not fired: return false
+	return true
+
+func _transaction_snapshot(state) -> Dictionary:
+	var players_snapshot := []
+	for player in state.players:
+		var weapons_snapshot := []
+		for weapon in player.weapons:
+			weapons_snapshot.append([weapon.id, weapon.structure_block_ids.duplicate(), weapon.ammo_block_id])
+		players_snapshot.append([player.id, player.reserve_block_ids.duplicate(), weapons_snapshot])
+	return {
+		"ownership": state.ownership_snapshot(),
+		"players": players_snapshot,
+		"active": [state.active_shot_block_id, state.active_shot_attacker_id, state.active_shot_weapon_id, state.resolving_shot],
+		"resolved": state.resolved_shot_keys.duplicate(true),
+	}

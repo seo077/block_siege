@@ -53,6 +53,12 @@ python -m http.server 8000 --directory build/web
 
 Open `http://localhost:8000/`.
 
+The committed Web build is deployed through GitHub Pages at:
+
+`https://seo077.github.io/block_siege/`
+
+Pushing changes under `build/web/` to `master` triggers the Pages workflow.
+
 ## Controls
 
 - `1`: select the active player's catapult

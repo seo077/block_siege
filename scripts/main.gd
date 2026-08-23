@@ -34,6 +34,7 @@ var block_bodies: Dictionary = {}
 var resolution_state: ResolutionState
 var resolution_error: StringName = &""
 var resolution_retry_available := false
+var interaction_enabled := true
 
 func _ready() -> void:
 	create_environment()
@@ -43,6 +44,7 @@ func _ready() -> void:
 	set_camera_for_player(active_player)
 	await get_tree().create_timer(0.8).timeout
 	capture_all_baselines()
+	_sync_scene_mirrors()
 	update_ui("플레이어 1의 턴")
 
 func create_environment() -> void:
@@ -245,7 +247,7 @@ func create_ui() -> void:
 	layer.add_child(debug_label)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if resolving_shot:
+	if not interaction_enabled or current_adjudication_state() != &"ready":
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_1:
@@ -313,6 +315,7 @@ func advance_resolution(delta: float) -> void:
 		resolving_shot = false
 		resolution_error = resolution_state.error_state
 		resolution_retry_available = resolution_state.retry_available
+		set_interaction_enabled(false)
 		update_ui("Resolution timed out; retry available")
 
 func retry_resolution() -> bool:
@@ -336,9 +339,12 @@ func retry_resolution() -> bool:
 	resolution_error = &""
 	resolution_retry_available = false
 	resolving_shot = true
+	set_interaction_enabled(false)
 	return true
 
 func handle_tank_movement(delta: float) -> void:
+	if not interaction_enabled or match_state == null or not match_state.can_accept_combat_input():
+		return
 	if selected_weapon != 1:
 		return
 	var input := Vector2(
@@ -409,6 +415,7 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	resolution_state = ResolutionState.begin(result.block_id, target_ids)
 	resolution_error = &""
 	resolution_retry_available = false
+	set_interaction_enabled(false)
 	return true
 
 
@@ -466,39 +473,44 @@ func _legacy_fire_selected(drag: Vector2) -> void:
 	update_ui("물리 판정 중…")
 
 func finish_shot_resolution() -> void:
-	var poses := collect_resolution_poses()
+	if match_state == null or resolution_state == null or resolution_state.status != &"resolved":
+		return
+	var poses: Dictionary = collect_resolution_poses()
+	var attacker_id: int = match_state.active_player_id
 	var model_result := match_state.resolve_shot_once(poses)
 	if not model_result.get("applied", false):
-		resolving_shot = false
 		return
+	apply_resolution_result(model_result)
+	match_state.adjudicate_fortress_victory(attacker_id, poses)
 	resolving_shot = false
-	var destroyed := []
-	var enemy_destroyed := false
-	for player in 2:
-		for weapon_index in 2:
-			var blocks: Array = weapon_blocks[player][weapon_index]
-			if not blocks.is_empty() and blocks.all(func(block): return not is_instance_valid(block) or block.is_fallen()):
-				destroyed.append([player, weapon_index])
-	for item in destroyed:
-		var owner: int = item[0]
-		var weapon_index: int = item[1]
-		if owner != active_player:
-			enemy_destroyed = true
-			var captured: int = weapon_blocks[owner][weapon_index].size()
-			if weapon_loaded[owner][weapon_index]:
-				captured += 1
-			reserve[active_player] += captured
-		for block in weapon_blocks[owner][weapon_index]:
-			if is_instance_valid(block):
-				block.queue_free()
-		weapon_blocks[owner][weapon_index] = []
-		weapon_loaded[owner][weapon_index] = false
-	reserve[active_player if enemy_destroyed else 1 - active_player] += 1
-	for projectile in get_tree().get_nodes_in_group("projectile"):
-		if is_instance_valid(projectile):
-			projectile.queue_free()
-	check_victory()
+	resolution_state = null
+	_sync_scene_mirrors()
+	set_interaction_enabled(not match_state.match_result.final)
+	if match_state.match_result.final:
+		show_result(_result_message(match_state.match_result))
+		return
 	update_ui("발사 판정 완료")
+
+func apply_resolution_result(result: Dictionary) -> void:
+	if not result.get("applied", false):
+		return
+	var affected: Array[int] = []
+	affected.assign(result.get("affected", []))
+	remove_transferred_bodies(affected)
+
+func remove_transferred_bodies(block_ids: Array[int]) -> void:
+	for block_id in block_ids:
+		var body := body_for_block(block_id)
+		block_bodies.erase(block_id)
+		if body == null or not is_instance_valid(body):
+			continue
+		body.remove_from_group("projectile")
+		for player_index in fortress_blocks.size():
+			fortress_blocks[player_index].erase(body)
+			for weapon_index in weapon_blocks[player_index].size():
+				weapon_blocks[player_index][weapon_index].erase(body)
+		body.visible = false
+		body.queue_free()
 
 func check_victory() -> void:
 	for player in 2:
@@ -507,22 +519,59 @@ func check_victory() -> void:
 			show_result("플레이어 %d 승리 — 요새 완파" % (2 if player == 0 else 1))
 
 func end_turn() -> void:
-	if resolving_shot:
+	if match_state == null or current_adjudication_state() != &"ready":
 		return
-	for weapon_index in 2:
-		if weapon_fired_this_turn[active_player][weapon_index]:
-			if reserve[active_player] > 0 and not weapon_blocks[active_player][weapon_index].is_empty():
-				reserve[active_player] -= 1
-				weapon_loaded[active_player][weapon_index] = true
-			weapon_fired_this_turn[active_player][weapon_index] = false
-	if active_player == 1:
-		round_number += 1
-	active_player = 1 - active_player
-	if round_number > MAX_ROUNDS:
-		resolve_round_limit()
+	var turn_result := match_state.request_end_turn(match_state.active_player_id)
+	if not turn_result.get("accepted", false):
+		return
+	_sync_scene_mirrors()
+	if match_state.match_result.final:
+		set_interaction_enabled(false)
+		show_result(_result_message(match_state.match_result))
 		return
 	set_camera_for_player(active_player)
 	update_ui("턴 전환")
+
+func set_interaction_enabled(enabled: bool) -> void:
+	interaction_enabled = enabled
+	if not enabled:
+		dragging = false
+
+func current_adjudication_state() -> StringName:
+	if match_state != null and match_state.match_result.get("final", false):
+		return &"final"
+	if resolution_state != null and resolution_state.status == &"timeout":
+		return &"timeout"
+	if match_state != null and (match_state.resolving_shot or resolving_shot):
+		return &"resolving"
+	return &"ready"
+
+func _sync_scene_mirrors() -> void:
+	if match_state == null:
+		return
+	round_number = match_state.round_number
+	active_player = 0
+	for index in match_state.players.size():
+		if match_state.players[index].id == match_state.active_player_id:
+			active_player = index
+	reserve.clear()
+	weapon_loaded.clear()
+	weapon_fired_this_turn.clear()
+	for player in match_state.players:
+		reserve.append(player.reserve_block_ids.size())
+		var loaded: Array = []
+		var fired: Array = []
+		for weapon in player.weapons:
+			loaded.append(weapon.ammo_block_id >= 0)
+			fired.append(weapon.fired_this_turn)
+		weapon_loaded.append(loaded)
+		weapon_fired_this_turn.append(fired)
+
+func _result_message(result: Dictionary) -> String:
+	if result.get("outcome", &"") == &"draw":
+		return "Draw"
+	var winners: Array = result.get("winner_ids", [])
+	return "Player %s wins" % (str(winners[0]) if not winners.is_empty() else "?")
 
 func resolve_round_limit() -> void:
 	var totals := [owned_block_total(0), owned_block_total(1)]
@@ -551,13 +600,11 @@ func owned_block_total(player: int) -> int:
 	return total
 
 func capture_all_baselines() -> void:
-	for player_blocks in fortress_blocks:
-		for block in player_blocks:
-			block.capture_baseline()
-	for player_weapons in weapon_blocks:
-		for blocks in player_weapons:
-			for block in blocks:
-				block.capture_baseline()
+	for block_id in block_bodies:
+		var body := body_for_block(block_id)
+		var record = match_state.blocks.get(block_id) if match_state != null else null
+		if body != null and record != null and record.location != &"reserve":
+			body.capture_baseline()
 
 func set_camera_for_player(player: int) -> void:
 	var x := -9.0 if player == 0 else 9.0

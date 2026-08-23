@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "9cb1ff03"
-next_action: "Implement T-002: bind the fixed scenario model to scene bodies"
+next_action: "Implement T-003: guarded one-shot firing"
 blocked_on: null
 open_assumptions: []
-last_verified_commit: "149b54d"
-head_commit: "149b54d"
+last_verified_commit: "106eae4"
+head_commit: "24edc93"
 updated_at: "2026-08-24"
 ---
 
@@ -17,8 +17,8 @@ updated_at: "2026-08-24"
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: G0 approved; Git initialized; local Godot 4.7.2 available; T-001 implemented and verified for REQ-001/REQ-002.
-- Now: T-002 is the next dependency-ready implementation task.
+- Done: G0 approved; Git and local Godot 4.7.2 available; T-001 and T-002 implemented and verified for REQ-001/REQ-002.
+- Now: T-003 is the next dependency-ready implementation task.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -43,3 +43,4 @@ updated_at: "2026-08-24"
 - 2026-08-23: Independent il-spec-critic reviewed spec 9cb1ff03 and criteria efc636cb and returned READY; G0 awaits human approval.
 - 2026-08-23: Human approved G0 for spec 9cb1ff03 and criteria efc636cb; code edits are unlocked.
 - 2026-08-24: Replaced ACL-broken Git metadata with a fresh repository linked to the preserved commits, confirmed sandbox execution, made local Godot 4.7.2 available, and verified T-001 for REQ-001/REQ-002 at 149b54d.
+- 2026-08-24: Implemented and independently reverified T-002 scene binding at 106eae4; added shared Godot version-control metadata at 24edc93; next is T-003.

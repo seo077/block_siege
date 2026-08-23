@@ -220,3 +220,4 @@
 ## Execution log
 
 - 2026-08-24: T-001 done at `149b54d`; REQ-001 and REQ-002 headless verification passed with Godot 4.7.2.
+- 2026-08-24: T-002 done at `106eae4`; fixed-scenario scene binding passed REQ-001 and REQ-002 headless verification.

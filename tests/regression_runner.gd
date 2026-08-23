@@ -5,6 +5,8 @@ const FixedScenario = preload("res://tests/fixtures/fixed_scenario.gd")
 const FixedScenarioScene = preload("res://tests/fixtures/fixed_scenario_scene.gd")
 const Main = preload("res://scripts/main.gd")
 const FiringCases = preload("res://tests/fixtures/firing_cases.gd")
+const StabilityCases = preload("res://tests/fixtures/stability_cases.gd")
+const ResolutionState = preload("res://scripts/core/resolution_state.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -23,6 +25,8 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_player_list_model()
 		"REQ-003":
 			return _verify_guarded_firing()
+		"REQ-004":
+			return _verify_fixed_tick_resolution()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -119,3 +123,42 @@ func _verify_guarded_firing() -> bool:
 				return false
 		main.free()
 	return true
+
+func _verify_fixed_tick_resolution() -> bool:
+	for stability_case in StabilityCases.cases():
+		var threshold_state := ResolutionState.begin(1, [2])
+		var motion := {1: {"linear": stability_case.linear, "angular": stability_case.angular}, 2: {"linear": 0.0, "angular": 0.0}}
+		threshold_state.advance_fixed_tick(0.81, motion)
+		if (threshold_state.quiet_elapsed > 0.0) != stability_case.quiet:
+			push_error("threshold case failed: %s quiet=%f" % [stability_case.kind, threshold_state.quiet_elapsed])
+			return false
+	var state := ResolutionState.begin(1, [2])
+	var quiet := {1: {"linear": 0.12, "angular": 0.2}, 2: {"linear": 0.0, "angular": 0.0}}
+	for index in 8:
+		if state.advance_fixed_tick(0.1, quiet) != &"resolving":
+			return false
+	for index in 6:
+		if state.advance_fixed_tick(0.1, quiet) != &"resolving":
+			return false
+	if state.advance_fixed_tick(0.1, quiet) != &"resolved":
+		push_error("quiet resolution failed: elapsed=%f quiet=%f status=%s" % [state.elapsed, state.quiet_elapsed, state.status])
+		return false
+	var reset_state := ResolutionState.begin(1, [2])
+	for index in 8:
+		reset_state.advance_fixed_tick(0.1, quiet)
+	for index in 5:
+		reset_state.advance_fixed_tick(0.1, quiet)
+	reset_state.advance_fixed_tick(0.1, {1: {"linear": 0.121, "angular": 0.2}, 2: {"linear": 0.0, "angular": 0.0}})
+	if reset_state.quiet_elapsed != 0.0:
+		push_error("moving tick did not reset quiet time")
+		return false
+	var timeout := ResolutionState.begin(1, [2])
+	var moving := {1: {"linear": 0.121, "angular": 0.201}, 2: {"linear": 0.0, "angular": 0.0}}
+	for index in 79:
+		if timeout.advance_fixed_tick(0.1, moving) != &"resolving":
+			return false
+	if timeout.advance_fixed_tick(0.1, moving) != &"timeout" or not timeout.retry_available:
+		push_error("timeout failed: elapsed=%f status=%s" % [timeout.elapsed, timeout.status])
+		return false
+	timeout.retry()
+	return timeout.status == &"resolving" and timeout.elapsed == 0.0 and not timeout.retry_available

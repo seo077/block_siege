@@ -2,6 +2,7 @@ extends Node3D
 
 const SiegeBlock = preload("res://scripts/siege_block.gd")
 const MatchState = preload("res://scripts/core/match_state.gd")
+const ResolutionState = preload("res://scripts/core/resolution_state.gd")
 const FIELD_SIZE := Vector2(60.0, 30.0)
 const ZONE_SIZE := Vector2(10.0, 10.0)
 const MAX_ROUNDS := 20
@@ -30,6 +31,9 @@ var debug_label: Label
 var trajectory: MeshInstance3D
 var match_state: MatchState
 var block_bodies: Dictionary = {}
+var resolution_state: ResolutionState
+var resolution_error: StringName = &""
+var resolution_retry_available := false
 
 func _ready() -> void:
 	create_environment()
@@ -265,20 +269,40 @@ func _physics_process(delta: float) -> void:
 	if not resolving_shot:
 		handle_tank_movement(delta)
 		return
-	resolve_elapsed += delta
-	var moving := false
-	for node in get_tree().get_nodes_in_group("projectile"):
-		if node is RigidBody3D and (node.linear_velocity.length() > 0.12 or node.angular_velocity.length() > 0.2):
-			moving = true
-			break
-	for player_blocks in fortress_blocks:
-		for block in player_blocks:
-			if is_instance_valid(block) and (block.linear_velocity.length() > 0.12 or block.angular_velocity.length() > 0.2):
-				moving = true
-				break
-	quiet_elapsed = 0.0 if moving else quiet_elapsed + delta
-	if (resolve_elapsed > 0.8 and quiet_elapsed > 0.6) or resolve_elapsed >= 8.0:
+	advance_resolution(delta)
+
+func collect_resolution_motion() -> Dictionary:
+	var motions: Dictionary = {}
+	if resolution_state == null:
+		return motions
+	for block_id in resolution_state.target_block_ids:
+		var body := body_for_block(block_id)
+		if body != null and is_instance_valid(body):
+			motions[block_id] = {"linear_velocity": body.linear_velocity, "angular_velocity": body.angular_velocity}
+	return motions
+
+func advance_resolution(delta: float) -> void:
+	if resolution_state == null:
+		return
+	var result := resolution_state.advance_fixed_tick(delta, collect_resolution_motion())
+	resolve_elapsed = resolution_state.elapsed
+	quiet_elapsed = resolution_state.quiet_elapsed
+	if result == &"resolved":
 		finish_shot_resolution()
+	elif result == &"timeout":
+		resolving_shot = false
+		resolution_error = resolution_state.error_state
+		resolution_retry_available = resolution_state.retry_available
+		update_ui("Resolution timed out; retry available")
+
+func retry_resolution() -> bool:
+	if resolution_state == null or not resolution_state.retry_available:
+		return false
+	resolution_state.retry()
+	resolution_error = &""
+	resolution_retry_available = false
+	resolving_shot = true
+	return true
 
 func handle_tank_movement(delta: float) -> void:
 	if selected_weapon != 1:
@@ -343,6 +367,14 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	resolving_shot = true
 	resolve_elapsed = 0.0
 	quiet_elapsed = 0.0
+	var target_ids: Array[int] = []
+	for block_id in match_state.blocks:
+		var record = match_state.blocks[block_id]
+		if record.location == &"fortress" or (record.location == &"weapon" and not record.is_ammo):
+			target_ids.append(block_id)
+	resolution_state = ResolutionState.begin(result.block_id, target_ids)
+	resolution_error = &""
+	resolution_retry_available = false
 	return true
 
 

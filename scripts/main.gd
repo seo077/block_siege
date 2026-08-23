@@ -281,6 +281,24 @@ func collect_resolution_motion() -> Dictionary:
 			motions[block_id] = {"linear_velocity": body.linear_velocity, "angular_velocity": body.angular_velocity}
 	return motions
 
+func collect_resolution_poses() -> Dictionary:
+	var poses: Dictionary = {}
+	if resolution_state == null:
+		return poses
+	for block_id in resolution_state.target_block_ids:
+		var body := body_for_block(block_id)
+		if body != null and is_instance_valid(body):
+			poses[block_id] = body.global_transform if body.is_inside_tree() else body.transform
+	return poses
+
+func freeze_timeout_bodies() -> void:
+	if resolution_state == null:
+		return
+	for block_id in resolution_state.target_block_ids:
+		var body := body_for_block(block_id)
+		if body != null and is_instance_valid(body):
+			body.freeze = true
+
 func advance_resolution(delta: float) -> void:
 	if resolution_state == null:
 		return
@@ -290,6 +308,8 @@ func advance_resolution(delta: float) -> void:
 	if result == &"resolved":
 		finish_shot_resolution()
 	elif result == &"timeout":
+		match_state.enter_timeout(collect_resolution_poses(), collect_resolution_motion())
+		freeze_timeout_bodies()
 		resolving_shot = false
 		resolution_error = resolution_state.error_state
 		resolution_retry_available = resolution_state.retry_available
@@ -298,6 +318,20 @@ func advance_resolution(delta: float) -> void:
 func retry_resolution() -> bool:
 	if resolution_state == null or not resolution_state.retry_available:
 		return false
+	var restored := match_state.retry_timed_out_shot()
+	if restored.is_empty():
+		return false
+	var poses: Dictionary = restored.poses
+	var motions: Dictionary = restored.motions
+	for block_id in resolution_state.target_block_ids:
+		var body := body_for_block(block_id)
+		if body == null or not is_instance_valid(body): continue
+		if poses.has(block_id):
+			body.global_transform = poses[block_id] if body.is_inside_tree() else poses[block_id]
+		body.freeze = false
+		if motions.has(block_id):
+			body.linear_velocity = motions[block_id].get("linear_velocity", motions[block_id].get("linear", Vector3.ZERO))
+			body.angular_velocity = motions[block_id].get("angular_velocity", motions[block_id].get("angular", Vector3.ZERO))
 	resolution_state.retry()
 	resolution_error = &""
 	resolution_retry_available = false
@@ -432,6 +466,11 @@ func _legacy_fire_selected(drag: Vector2) -> void:
 	update_ui("물리 판정 중…")
 
 func finish_shot_resolution() -> void:
+	var poses := collect_resolution_poses()
+	var model_result := match_state.resolve_shot_once(poses)
+	if not model_result.get("applied", false):
+		resolving_shot = false
+		return
 	resolving_shot = false
 	var destroyed := []
 	var enemy_destroyed := false

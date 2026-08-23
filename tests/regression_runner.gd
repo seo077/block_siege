@@ -14,6 +14,8 @@ const ResolutionCases = preload("res://tests/fixtures/resolution_cases.gd")
 const LedgerCases = preload("res://tests/fixtures/ledger_cases.gd")
 const ResolutionTransaction = preload("res://scripts/core/resolution_transaction.gd")
 const TurnAndVictoryCases = preload("res://tests/fixtures/turn_and_victory_cases.gd")
+const RetryCases = preload("res://tests/fixtures/retry_cases.gd")
+const ResolutionSnapshot = preload("res://scripts/core/resolution_snapshot.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -42,6 +44,8 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_ledger_transitions()
 		"REQ-008":
 			return _verify_turns_and_victory()
+		"REQ-009":
+			return _verify_timeout_retry()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -303,6 +307,75 @@ func _transaction_snapshot(state) -> Dictionary:
 		"active": [state.active_shot_block_id, state.active_shot_attacker_id, state.active_shot_weapon_id, state.resolving_shot],
 		"resolved": state.resolved_shot_keys.duplicate(true),
 	}
+
+func _verify_timeout_retry() -> bool:
+	var main := Main.new()
+	root.add_child(main)
+	main.create_match()
+	var scene_attacker = main.match_state.players[0]
+	if not main.fire_weapon(scene_attacker.id, scene_attacker.weapons[0].id, Vector2(80, -20)): return false
+	var scene_shot: int = main.match_state.active_shot_block_id
+	var scene_body = main.body_for_block(scene_shot)
+	var timeout_pose := Transform3D(Basis.from_euler(Vector3(0.1, 0.2, 0.3)), Vector3(3, 4, 5))
+	var timeout_linear := Vector3(4, 5, 6)
+	var timeout_angular := Vector3(1, 2, 3)
+	scene_body.global_transform = timeout_pose
+	scene_body.linear_velocity = timeout_linear
+	scene_body.angular_velocity = timeout_angular
+	var scene_poses := main.collect_resolution_poses()
+	var scene_motions := main.collect_resolution_motion()
+	main.match_state.enter_timeout(scene_poses, scene_motions)
+	main.freeze_timeout_bodies()
+	main.resolving_shot = false
+	for tick in 12: main._physics_process(0.1)
+	if not scene_body.freeze or scene_body.transform != timeout_pose: return false
+	if scene_body.linear_velocity != timeout_linear or scene_body.angular_velocity != timeout_angular: return false
+	if not main.match_state.timeout_snapshot.equals_runtime(main.match_state, scene_poses, scene_motions): return false
+	main.free()
+	for retry_case in RetryCases.cases():
+		var state = FixedScenario.build()
+		var attacker = state.players[0]
+		var shot_id: int = attacker.weapons[0].ammo_block_id
+		if not state.request_fire(attacker.id, attacker.weapons[0].id, Vector2.ONE).accepted: return false
+		var ownership := state.ownership_snapshot()
+		var gameplay_before := _transaction_snapshot(state)
+		var poses := {shot_id: Transform3D(Basis.IDENTITY, Vector3(1, 2, 3))}
+		var motions := {shot_id: {"linear_velocity": Vector3(4, 5, 6), "angular_velocity": Vector3(1, 2, 3)}}
+		state.enter_timeout(poses, motions)
+		if not state.resolution_timeout_error or not state.combat_input_locked: return false
+		var saved_snapshot = state.timeout_snapshot
+		if not saved_snapshot.equals_runtime(state, poses, motions): return false
+		poses[shot_id] = Transform3D.IDENTITY
+		motions[shot_id].linear_velocity = Vector3.ZERO
+		if saved_snapshot.equals_runtime(state, poses, motions): return false
+		if state.request_fire(attacker.id, attacker.weapons[1].id, Vector2.ONE).accepted: return false
+		if state.request_end_turn(attacker.id).accepted: return false
+		for spam in 4:
+			if state.resolve_shot_once(_poses_for(state, [])).applied: return false
+		if gameplay_before != _transaction_snapshot(state) or state.ownership_snapshot() != ownership or state.resolution_apply_count() != 0: return false
+		var resolution := ResolutionState.begin(shot_id, [state.players[1].fortress_block_ids[0]])
+		var moving := {shot_id: {"linear": 1.0, "angular": 1.0}, state.players[1].fortress_block_ids[0]: {"linear": 1.0, "angular": 1.0}}
+		for tick in 80:
+			if resolution.advance_fixed_tick(0.1, moving) != (&"timeout" if tick == 79 else &"resolving"): return false
+		if not is_equal_approx(resolution.elapsed, 8.0): return false
+		for timeout_index in retry_case.timeouts:
+			var restored := state.retry_timed_out_shot()
+			if restored.is_empty() or restored.poses[shot_id].origin != Vector3(1, 2, 3): return false
+			if restored.motions[shot_id].linear_velocity != Vector3(4, 5, 6): return false
+			if state.active_shot_block_id != shot_id or state.ownership_snapshot() != ownership: return false
+			resolution.retry()
+			if resolution.elapsed != 0.0 or resolution.quiet_elapsed != 0.0 or resolution.shot_block_id != shot_id or resolution.target_block_ids != [shot_id, state.players[1].fortress_block_ids[0]]: return false
+			if timeout_index + 1 < retry_case.timeouts:
+				state.enter_timeout(restored.poses, restored.motions)
+				for tick in 80:
+					if resolution.advance_fixed_tick(0.1, moving) != (&"timeout" if tick == 79 else &"resolving"): return false
+				if not is_equal_approx(resolution.elapsed, 8.0): return false
+		var resolved = state.resolve_shot_once(_poses_for(state, []))
+		if not resolved.applied or state.resolution_apply_count() != 1: return false
+		var duplicate = state.resolve_shot_once(_poses_for(state, []))
+		if duplicate.applied or state.resolution_apply_count() != 1: return false
+		if not state.validate_ledger().valid: return false
+	return true
 
 func _verify_turns_and_victory() -> bool:
 	for test_case in TurnAndVictoryCases.cases():

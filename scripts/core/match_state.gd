@@ -4,6 +4,7 @@ extends RefCounted
 const BlockRecord = preload("res://scripts/core/block_record.gd")
 const WeaponState = preload("res://scripts/core/weapon_state.gd")
 const PlayerState = preload("res://scripts/core/player_state.gd")
+const ResolutionSnapshot = preload("res://scripts/core/resolution_snapshot.gd")
 
 const FORTRESS_BLOCK_COUNT := 6
 const CATAPULT_BLOCK_COUNT := 3
@@ -29,6 +30,9 @@ var active_shot_attacker_id := -1
 var active_shot_weapon_id := -1
 var resolved_shot_keys: Dictionary = {}
 var original_block_ids: Array[int] = []
+var timeout_snapshot = null
+var resolution_timeout_error := false
+var _resolution_apply_count := 0
 
 static func create_fixed_scenario(player_ids: Array[int] = [1, 2]) -> MatchState:
 	var scenario_players: Array[PlayerState] = []
@@ -184,8 +188,33 @@ func request_fire(player_id: int, weapon_id: int, drag: Vector2) -> Dictionary:
 	return {"accepted": true, "block_id": block_id, "player_id": player_id, "weapon_id": weapon_id, "drag": drag}
 
 func resolve_shot_once(poses: Dictionary) -> Dictionary:
+	if resolution_timeout_error:
+		return {"accepted": false, "applied": false, "reason": "resolution_timeout", "affected": []}
 	var transaction = load("res://scripts/core/resolution_transaction.gd").build(self, poses)
-	return transaction.apply(self)
+	var result: Dictionary = transaction.apply(self)
+	if result.get("applied", false):
+		_resolution_apply_count += 1
+	return result
+
+func enter_timeout(poses: Dictionary, motions: Dictionary) -> void:
+	if timeout_snapshot == null:
+		timeout_snapshot = ResolutionSnapshot.capture(self, poses, motions)
+	resolution_timeout_error = true
+	combat_input_locked = true
+	resolving_shot = true
+
+func retry_timed_out_shot() -> Dictionary:
+	if not resolution_timeout_error or timeout_snapshot == null:
+		return {}
+	var restored: Dictionary = timeout_snapshot.restore_into(self)
+	timeout_snapshot = null
+	resolution_timeout_error = false
+	combat_input_locked = false
+	resolving_shot = true
+	return restored
+
+func resolution_apply_count() -> int:
+	return _resolution_apply_count
 
 func ownership_snapshot() -> Dictionary:
 	var snapshot := {}

@@ -4,6 +4,7 @@ const BlockRecord = preload("res://scripts/core/block_record.gd")
 const FixedScenario = preload("res://tests/fixtures/fixed_scenario.gd")
 const FixedScenarioScene = preload("res://tests/fixtures/fixed_scenario_scene.gd")
 const Main = preload("res://scripts/main.gd")
+const FiringCases = preload("res://tests/fixtures/firing_cases.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -20,6 +21,8 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_fixed_scenario()
 		"REQ-002":
 			return _verify_player_list_model()
+		"REQ-003":
+			return _verify_guarded_firing()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -78,4 +81,41 @@ func _verify_player_list_model() -> bool:
 		for other in match_state.players:
 			if other.id != action_owner.id and other.turn_actions.shots_fired != 0:
 				return false
+	return true
+
+func _verify_guarded_firing() -> bool:
+	for firing_case in FiringCases.cases():
+		var main := Main.new()
+		root.add_child(main)
+		main.create_match()
+		var player = main.match_state.players[firing_case.player_index]
+		var weapon = player.weapons[firing_case.weapon_index]
+		var ammo_id: int = weapon.ammo_block_id
+		if firing_case.kind == &"unloaded":
+			weapon.ammo_block_id = -1
+		if firing_case.kind == &"repeated":
+			if not main.fire_weapon(player.id, weapon.id, firing_case.drag):
+				main.free()
+				return false
+		var accepted: bool = main.fire_weapon(player.id, weapon.id, firing_case.drag)
+		if accepted != firing_case.expected:
+			main.free()
+			return false
+		var projectile_count := 0
+		for body in main.block_bodies.values():
+			if body.is_in_group("projectile"):
+				projectile_count += 1
+		var expected_count := 1 if firing_case.kind in [&"valid", &"repeated"] else 0
+		if projectile_count != expected_count:
+			main.free()
+			return false
+		if expected_count == 1:
+			var projectile = main.body_for_block(ammo_id)
+			if projectile == null or projectile.block_id != ammo_id or not projectile.is_in_group("projectile"):
+				main.free()
+				return false
+			if weapon.ammo_block_id != -1 or not weapon.fired_this_turn:
+				main.free()
+				return false
+		main.free()
 	return true

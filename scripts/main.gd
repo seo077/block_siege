@@ -296,6 +296,74 @@ func handle_tank_movement(delta: float) -> void:
 			block.position += motion
 
 func fire_selected(drag: Vector2) -> void:
+	var player = match_state.players[active_player]
+	fire_weapon(player.id, player.weapons[selected_weapon].id, drag)
+	return
+
+
+func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
+	if match_state == null:
+		return false
+	var player_index := -1
+	for index in match_state.players.size():
+		if match_state.players[index].id == player_id:
+			player_index = index
+			break
+	if player_index < 0 or player_index >= weapon_blocks.size():
+		return false
+	var weapon = match_state.players[player_index].find_weapon(weapon_id)
+	if weapon == null:
+		return false
+	var weapon_index := match_state.players[player_index].weapons.find(weapon)
+	if weapon_index < 0 or weapon_index >= weapon_blocks[player_index].size():
+		return false
+	var blocks: Array = weapon_blocks[player_index][weapon_index]
+	if blocks.is_empty() or not is_instance_valid(blocks[0]):
+		return false
+	var loaded_block_id: int = weapon.ammo_block_id
+	if loaded_block_id < 0 or body_for_block(loaded_block_id) == null:
+		return false
+	var result := match_state.request_fire(player_id, weapon_id, drag)
+	if not result.accepted:
+		return false
+	var origin := Vector3.ZERO
+	for block in blocks:
+		origin += block.global_position if block.is_inside_tree() else block.position
+	origin /= blocks.size()
+	var forward := 1.0 if player_index == 0 else -1.0
+	var lateral := clampf(drag.x / 280.0, -0.7, 0.7)
+	var power := clampf(drag.length() / 110.0, 0.8, 3.2)
+	var elevation := 0.72 if weapon_index == 0 else 0.16
+	var direction := Vector3(forward, elevation - drag.y / 900.0, lateral).normalized()
+	var projectile := spawn_projectile(result.block_id, origin + Vector3(forward * 0.8, 0.55, 0), direction * power * (7.2 if weapon_index == 0 else 5.8))
+	if projectile == null:
+		return false
+	weapon_loaded[player_index][weapon_index] = false
+	weapon_fired_this_turn[player_index][weapon_index] = true
+	resolving_shot = true
+	resolve_elapsed = 0.0
+	quiet_elapsed = 0.0
+	return true
+
+
+func spawn_projectile(block_id: int, origin: Vector3, impulse: Vector3) -> SiegeBlock:
+	var projectile := body_for_block(block_id)
+	if projectile == null:
+		return null
+	projectile.freeze = false
+	projectile.visible = true
+	if projectile.is_inside_tree():
+		projectile.global_position = origin
+	else:
+		projectile.position = origin
+	projectile.linear_velocity = Vector3.ZERO
+	projectile.angular_velocity = Vector3.ZERO
+	projectile.add_to_group("projectile")
+	projectile.apply_central_impulse(impulse)
+	return projectile
+
+
+func _legacy_fire_selected(drag: Vector2) -> void:
 	if drag.length() < 12.0:
 		update_ui("드래그가 너무 짧습니다")
 		return

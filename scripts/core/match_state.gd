@@ -12,6 +12,9 @@ const RESERVE_BLOCK_COUNT := 87
 
 var players: Array[PlayerState]
 var blocks: Dictionary
+var active_player_id: int
+var resolving_shot := false
+var combat_input_locked := false
 
 static func create_fixed_scenario(player_ids: Array[int] = [1, 2]) -> MatchState:
 	var scenario_players: Array[PlayerState] = []
@@ -51,7 +54,28 @@ static func create_from_players(p_players: Array[PlayerState], p_blocks: Diction
 	var match_state = MatchState.new()
 	match_state.players = p_players.duplicate()
 	match_state.blocks = p_blocks.duplicate()
+	match_state.active_player_id = p_players[0].id if not p_players.is_empty() else -1
 	return match_state
+
+func can_accept_combat_input() -> bool:
+	return not combat_input_locked and not resolving_shot and active_player_id >= 0
+
+func request_fire(player_id: int, weapon_id: int, drag: Vector2) -> Dictionary:
+	var rejected := {"accepted": false}
+	if not can_accept_combat_input() or player_id != active_player_id or drag.length_squared() <= 0.0:
+		return rejected
+	var player := get_player(player_id)
+	if player == null:
+		return rejected
+	var weapon := player.find_weapon(weapon_id)
+	if weapon == null or not weapon.can_fire():
+		return rejected
+	var block_id := weapon.ammo_block_id
+	weapon.ammo_block_id = -1
+	weapon.fired_this_turn = true
+	player.turn_actions.shots_fired += 1
+	resolving_shot = true
+	return {"accepted": true, "block_id": block_id, "player_id": player_id, "weapon_id": weapon_id, "drag": drag}
 
 func get_player(player_id: int) -> PlayerState:
 	for player in players:

@@ -1,6 +1,7 @@
 extends Node3D
 
 const SiegeBlock = preload("res://scripts/siege_block.gd")
+const MatchState = preload("res://scripts/core/match_state.gd")
 const FIELD_SIZE := Vector2(60.0, 30.0)
 const ZONE_SIZE := Vector2(10.0, 10.0)
 const MAX_ROUNDS := 20
@@ -27,11 +28,13 @@ var status_label: Label
 var hint_label: Label
 var debug_label: Label
 var trajectory: MeshInstance3D
+var match_state: MatchState
+var block_bodies: Dictionary = {}
 
 func _ready() -> void:
 	create_environment()
 	create_field()
-	create_armies()
+	create_match()
 	create_ui()
 	set_camera_for_player(active_player)
 	await get_tree().create_timer(0.8).timeout
@@ -104,6 +107,79 @@ func create_armies() -> void:
 		create_weapon(player, 0, Vector3(home_x + direction * 1.5, 0.0, -2.0), direction)
 		create_weapon(player, 1, Vector3(home_x + direction * 1.5, 0.0, 2.0), direction)
 
+func create_match(p_player_ids: Array[int] = [1, 2]) -> void:
+	match_state = MatchState.create_fixed_scenario(p_player_ids)
+	spawn_match_bodies(match_state)
+
+func spawn_match_bodies(state: MatchState) -> void:
+	for body in block_bodies.values():
+		if is_instance_valid(body):
+			body.queue_free()
+	block_bodies.clear()
+	fortress_blocks.clear()
+	weapon_blocks.clear()
+	reserve.clear()
+	weapon_loaded.clear()
+	weapon_fired_this_turn.clear()
+	for player_index in state.players.size():
+		var player = state.players[player_index]
+		var color: Color = PLAYER_COLORS[player_index % PLAYER_COLORS.size()]
+		var direction := 1.0 if player_index % 2 == 0 else -1.0
+		var home_x: float = -25.0 + 50.0 * player_index / maxi(1, state.players.size() - 1)
+		var player_fortress: Array = []
+		var player_weapons: Array = []
+		reserve.append(player.reserve_block_ids.size())
+		weapon_loaded.append([])
+		weapon_fired_this_turn.append([])
+		for index in player.fortress_block_ids.size():
+			var block := _spawn_record(state.blocks[player.fortress_block_ids[index]], color, false)
+			var level: int = index / 2
+			var column: int = index % 2
+			block.position = Vector3(home_x - direction * 2.5, 0.11 + level * 0.21, (column - 0.5) * 0.42)
+			if level % 2 == 1:
+				block.rotation.y = PI * 0.5
+			player_fortress.append(block)
+		for weapon_index in player.weapons.size():
+			var weapon = player.weapons[weapon_index]
+			var weapon_bodies: Array = []
+			var origin := Vector3(home_x + direction * 1.5, 0.0, -2.0 if weapon_index == 0 else 2.0)
+			for index in weapon.structure_block_ids.size():
+				var block := _spawn_record(state.blocks[weapon.structure_block_ids[index]], color, false)
+				block.position = origin + Vector3(0, 0.11, -0.22 + index * 0.44)
+				if index >= 2:
+					block.position = origin + Vector3(0, 0.32, 0)
+					block.rotation.z = direction * deg_to_rad(8)
+				weapon_bodies.append(block)
+			var ammo := _spawn_record(state.blocks[weapon.ammo_block_id], color.lightened(0.35), true)
+			ammo.position = origin + Vector3(direction * 0.35, 0.45, 0)
+			player_weapons.append(weapon_bodies)
+			weapon_loaded[player_index].append(true)
+			weapon_fired_this_turn[player_index].append(false)
+		fortress_blocks.append(player_fortress)
+		weapon_blocks.append(player_weapons)
+		for reserve_index in player.reserve_block_ids.size():
+			var reserve_body := _spawn_record(state.blocks[player.reserve_block_ids[reserve_index]], color, true)
+			reserve_body.visible = false
+			reserve_body.position = Vector3(home_x, -10.0, reserve_index * 0.4)
+
+func _spawn_record(record: BlockRecord, color: Color, frozen_block: bool) -> SiegeBlock:
+	var block := SiegeBlock.new()
+	block.setup(record.id, record.owner_id, record.object_id, color, frozen_block, record.is_ammo)
+	block.apply_record(record)
+	add_child(block)
+	block_bodies[record.id] = block
+	return block
+
+func body_for_block(block_id: int) -> SiegeBlock:
+	return block_bodies.get(block_id) as SiegeBlock
+
+func sync_body_poses_to_model() -> void:
+	for block_id in block_bodies:
+		var body := block_bodies[block_id] as SiegeBlock
+		if is_instance_valid(body):
+			body.apply_record(match_state.blocks[block_id])
+			body.capture_baseline()
+
 func create_fortress(player: int, origin: Vector3) -> void:
 	var object_id := allocate_object_id()
 	for level in 3:
@@ -132,7 +208,7 @@ func create_weapon(player: int, weapon_index: int, origin: Vector3, direction: f
 
 func make_block(player: int, object_id: int, color: Color) -> SiegeBlock:
 	var block := SiegeBlock.new()
-	block.setup(player, object_id, color)
+	block.setup(-1, player, object_id, color)
 	add_child(block)
 	return block
 
@@ -237,14 +313,13 @@ func fire_selected(drag: Vector2) -> void:
 		origin += block.global_position
 	origin /= blocks.size()
 	var forward := 1.0 if active_player == 0 else -1.0
-	var lateral := clamp(drag.x / 280.0, -0.7, 0.7)
-	var power := clamp(drag.length() / 110.0, 0.8, 3.2)
+	var lateral := clampf(drag.x / 280.0, -0.7, 0.7)
+	var power := clampf(drag.length() / 110.0, 0.8, 3.2)
 	var elevation := 0.72 if selected_weapon == 0 else 0.16
 	var direction := Vector3(forward, elevation - drag.y / 900.0, lateral).normalized()
 
 	var projectile := SiegeBlock.new()
-	projectile.setup(active_player, -1, PROJECTILE_COLORS[active_player])
-	projectile.is_ammo = true
+	projectile.setup(-1, active_player, -1, PROJECTILE_COLORS[active_player], false, true)
 	projectile.add_to_group("projectile")
 	add_child(projectile)
 	projectile.global_position = origin + Vector3(forward * 0.8, 0.55, 0)

@@ -2,6 +2,8 @@
 
 const BlockRecord = preload("res://scripts/core/block_record.gd")
 const FixedScenario = preload("res://tests/fixtures/fixed_scenario.gd")
+const FixedScenarioScene = preload("res://tests/fixtures/fixed_scenario_scene.gd")
+const Main = preload("res://scripts/main.gd")
 
 func _init() -> void:
 	var requirement := _read_requirement()
@@ -49,7 +51,12 @@ func _verify_fixed_scenario() -> bool:
 			owned += weapon.structure_block_ids.size() + int(weapon.ammo_block_id >= 0)
 		if owned != 100:
 			return false
-	return true
+	var main := Main.new()
+	root.add_child(main)
+	main.create_match()
+	var scene_valid := FixedScenarioScene.assert_scene_binding(main)
+	main.free()
+	return scene_valid
 
 func _verify_player_list_model() -> bool:
 	for ids in [[7, 3], [30, 10, 20], [20, 30, 10]]:

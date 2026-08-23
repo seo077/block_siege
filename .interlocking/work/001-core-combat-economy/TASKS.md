@@ -222,3 +222,4 @@
 - 2026-08-24: T-001 done at `149b54d`; REQ-001 and REQ-002 headless verification passed with Godot 4.7.2.
 - 2026-08-24: T-002 done at `106eae4`; fixed-scenario scene binding passed REQ-001 and REQ-002 headless verification.
 - 2026-08-24: T-003 done at `30d23ab`; fixture-driven guarded firing passed REQ-001, REQ-002, and REQ-003 headless verification.
+- 2026-08-24: T-004 done at `7b79111`; fixed-tick thresholds, quiet persistence/reset, exact timeout, and retry timers passed REQ-004 verification.

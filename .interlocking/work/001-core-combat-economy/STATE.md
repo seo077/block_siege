@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "9cb1ff03"
-next_action: "Implement T-004: fixed-tick stability and timeout adjudication"
+next_action: "Implement T-005: per-block baselines and collapse classification"
 blocked_on: null
 open_assumptions: []
-last_verified_commit: "30d23ab"
-head_commit: "30d23ab"
+last_verified_commit: "7b79111"
+head_commit: "7b79111"
 updated_at: "2026-08-24"
 ---
 
@@ -17,8 +17,8 @@ updated_at: "2026-08-24"
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: G0 approved; Git and local Godot 4.7.2 available; T-001 through T-003 implemented and criteria-verified.
-- Now: T-004 is the next dependency-ready implementation task.
+- Done: G0 approved; Git and local Godot 4.7.2 available; T-001 through T-004 implemented and criteria-verified.
+- Now: T-005 is the next dependency-ready implementation task.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -45,3 +45,4 @@ updated_at: "2026-08-24"
 - 2026-08-24: Replaced ACL-broken Git metadata with a fresh repository linked to the preserved commits, confirmed sandbox execution, made local Godot 4.7.2 available, and verified T-001 for REQ-001/REQ-002 at 149b54d.
 - 2026-08-24: Implemented and independently reverified T-002 scene binding at 106eae4; added shared Godot version-control metadata at 24edc93; next is T-003.
 - 2026-08-24: Implemented T-003 guarded one-shot firing at 30d23ab; fixture-driven REQ-001/002/003 headless verification passed; next is T-004.
+- 2026-08-24: Implemented T-004 fixed-tick stability and timeout adjudication at 7b79111; REQ-004 boundaries and retry timers passed; next is T-005.

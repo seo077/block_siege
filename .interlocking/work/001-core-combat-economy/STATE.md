@@ -1,15 +1,15 @@
 ---
 il_version: 1
 feature: 001-core-combat-economy
-phase: COMPLETE
+phase: SPEC
 size: feature
 gates_passed: [G0]
-spec_sha256: "a5372bcc"
-next_action: "E1 complete; await the next requested epic or feature"
+spec_sha256: "f54a53a5"
+next_action: "Run fresh independent acceptance verification for REQ-001 through REQ-017"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
-head_commit: "a6dea47"
+head_commit: "9f27abc"
 updated_at: "2026-08-25"
 ---
 
@@ -87,3 +87,8 @@ updated_at: "2026-08-25"
 - 2026-08-25: Independent verification returned 13 PASS and REQ-014 FAIL because the deployed bridge missed the harness's 6.4-second startup window; appended corrective T-017.
 - 2026-08-25: Completed T-017 at 622afa5; bounded 30-second readiness polling with diagnostic timeout preserved nonzero failure and the live 11-case REQ-014 command passed.
 - 2026-08-25: Fresh independent verification of af88318..a6dea47 returned PASS for all 14 requirements with 0 failures and 0 inconclusive results; E1 is complete with live browser evidence.
+- 2026-08-25: User reported that shots do not reach the opposing deployment zone and Enter cannot advance the turn after firing; reopened the spec with DEC-010 and REQ-015 through REQ-017 for range, bounded normal resolution, and end-to-end Web turn transition. Prior G0 approval is invalidated.
+- 2026-08-25: Human approved G0 for spec f54a53a5 and criteria 0346a39d; code edits are unlocked for REQ-015 through REQ-017.
+- 2026-08-25: Completed T-018 at 060df7f; REQ-015/016 passed both-player range, opposing-zone reach, bounded field exit, normal resolution, input lock, and ready HUD checks.
+- 2026-08-25: Completed T-019 at 86ee66e; after diagnosing projectile-only residual spin, physical damping/friction produced repeated real-browser reach, normal resolution, and Enter turn-transition passes without blanket forced settling.
+- 2026-08-25: Completed T-020 at 9f27abc; Pages workflow 32755631110 succeeded and live browser evidence confirmed opposing-zone reach, normal resolution without timeout, and Enter transition to player 2 in round 1.

@@ -14,6 +14,9 @@ Block Siege의 전체 기획은 여러 하위 시스템을 포함하는 epic으�
 - Godot 4 Web은 WebGL 2.0과 Compatibility 렌더러를 사용하며, 현재 프로젝트 설정도 `gl_compatibility`를 선택한다 — [Godot 4.5 Web export](https://docs.godotengine.org/en/4.5/tutorials/export/exporting_for_web.html) and `project.godot` (read 2026-08-23)
 - `scripts/main.gd`는 고정된 두 플레이어와 장면 노드 배열에 규칙 상태를 보관하며, 0.8초 이후 기준 자세를 캡처하고 속도 임계값 또는 8초 타임아웃으로 해결 구간을 끝낸다 — repository source (read 2026-08-23)
 - `scripts/siege_block.gd`는 짧은 변 0.2의 절반인 0.1 이상 변위 또는 기준 자세 대비 30도 이상 회전을 낙하로 판정한다 — repository source (read 2026-08-23)
+- 현재 장면은 x축 -30~+30 BL 전장에 각 진영을 x=-25와 x=+25 중심의 10×10 BL로 두고, 투석기를 x=-23.5와 x=+23.5에 배치하지만 `launch_solution()`의 최대 충격량은 18이다. 기존 브라우저 검증은 초기 속도와 상태 전이만 확인하고 실제 비행 거리·해결 완료·Enter 턴 전환은 확인하지 않는다 — `scripts/main.gd`, `tests/web/run_browser_regression.mjs` (read 2026-08-25)
+- Godot `RigidBody3D`는 감쇠·중력·sleeping 상태를 물리 시뮬레이션에서 제공하며, 물리 상태 기반 게임 판정은 고정 물리 틱에서 관찰할 수 있다 — [Godot RigidBody3D](https://docs.godotengine.org/en/stable/classes/class_rigidbody3d.html) (read 2026-08-25)
+- Godot 입력 이벤트는 키보드와 포인터 이벤트를 동일한 입력 처리 경로로 전달하므로, Web 캔버스에 실제 포인터와 Enter 이벤트를 보내는 브라우저 검증으로 사용자 턴 전환 경로를 재현할 수 있다 — [Godot InputEvent](https://docs.godotengine.org/en/stable/tutorials/inputs/inputevent.html) (read 2026-08-25)
 - 설치된 `godot`, `godot4`, Godot Windows 실행 파일 이름을 명령 경로에서 찾지 못했으며 README도 엔진 실행 검증이 아직 수행되지 않았다고 기록한다 — local environment and `README.md` (checked 2026-08-23)
 
 ## Decisions
@@ -62,6 +65,11 @@ DEC-009 수정된 Web export를 GitHub Pages에 실제 배포한다.
   Asked: 배포 사이트에서 재현된 결함을 고치라는 요청이 로컬 수정뿐 아니라 실제 사이트 갱신까지 포함하는지 판단했다.
   Answer: "그럼 고쳐 뭐해" 및 후속 승인 — `build/web`을 갱신해 master에 커밋·푸시하고 Pages workflow로 배포한 뒤 실제 URL을 검증한다.
   Lands in: REQ-014
+
+DEC-010 발사가 실제 상대 진영에 도달하고 판정 완료 후 Enter로 턴이 전환되는 사용자 경로를 E1에 포함한다.
+  Asked: 사용자가 배포 게임에서 발사 후 Enter를 눌러도 턴이 이동하지 않고, 마우스 드래그 발사가 상대 진영까지 가지 않는다고 지적했다. 상대 진영 도달, 정상 판정 종료, 판정 완료 후 Enter 전환과 실제 Web 검증을 권장 기준으로 보강할지 제안했다.
+  Answer: "보강해주세요" — 권장 기준대로 사거리·해결 완료·브라우저 턴 전환을 명시적인 완료 조건으로 추가한다.
+  Lands in: REQ-015, REQ-016, REQ-017
 
 ## Size
 
@@ -121,6 +129,12 @@ manifest 경로는 `build/web/build-manifest.json`으로 고정하고 `source_co
 
 REQ-014 완료를 위해 `build/web/**`과 `build/web/build-manifest.json`을 master에 커밋·푸시하고 `.github/workflows/pages.yml`의 GitHub Pages 배포를 실행하는 외부 변경을 허용한다. 검증자는 배포 URL과 자산을 읽기 위한 네트워크 접근이 필요하며, workflow 결과와 배포 manifest를 증거 JSON에 기록해야 한다.
 
+REQ-015 고정 시나리오의 투석기는 두 플레이어 모두 자기 진영의 발사 위치에서 상대 진영을 향해 유효한 공성 사거리를 가져야 한다. 좌우 조준 성분이 없는 240픽셀 수평 드래그로 발사한 투사체 중심은 발사 후 8.0초 이내에 플레이어 1이면 x≥20 BL, 플레이어 2이면 x≤-20 BL인 상대 배치 진영 경계에 진입해야 한다. 동일한 초기 상태에서 40·120·240픽셀 수평 드래그의 상대 방향 최대 진행 거리는 그 순서대로 엄격히 증가해야 하며, 어느 세기도 자기 진영 반대 방향으로 발사되어서는 안 된다.
+
+REQ-016 고정 시나리오에서 유효한 드래그로 시작한 표준 발사는 타임아웃 오류에 머무르지 않고 정상 해결되어야 한다. 발사체가 전장 경계 x=±30 BL 또는 z=±15 BL를 벗어나거나 y<-2 BL로 낙하하면 해당 고정 물리 틱에서 더 이상 이동하지 않도록 안전하게 정지시켜 안정 판정 대상에 유지하고, REQ-004의 최소 0.8초와 연속 0.6초 안정 조건을 충족한 뒤 소유권·승패 결과를 정확히 한 번 적용해 화면 상태를 `ready` 또는 `final`로 전이해야 한다. 해결 중 Enter는 계속 차단하되, 정상 해결 뒤에는 HUD가 `[Enter]: 턴 종료`가 가능함을 명시해야 한다.
+
+REQ-017 저장소 소유 브라우저 회귀 하네스는 로컬 Web export와 실제 배포 URL에서 각각 새 게임을 열고, 플레이어 1의 실제 캔버스 240픽셀 포인터 press→move→release 발사가 REQ-015의 상대 진영 경계에 도달하는지 시간·위치 표본으로 확인해야 한다. 이어 정상 해결로 `resolving→ready` 전이가 발생한 뒤 실제 Enter keydown·keyup을 보내고, 활성 플레이어가 1에서 2로 정확히 한 번 바뀌며 라운드는 1로 유지되고 새 활성 플레이어의 카메라·HUD·입력 가능 상태가 갱신되는지 확인해야 한다. 발사가 8.0초 안에 상대 진영 경계에 도달하지 못하거나, 타임아웃에 들어가거나, 해결 전 Enter가 턴을 바꾸거나, 해결 후 Enter가 턴을 바꾸지 못하거나, 이 과정의 JSON 위치·상태·입력 증거와 PNG 스크린샷이 생성되지 않으면 검증 명령은 0이 아닌 종료 코드로 실패해야 한다.
+
 ## Threat model
 
 | Asset | Threat | Mitigation | Becomes |
@@ -130,6 +144,7 @@ REQ-014 완료를 위해 `build/web/**`과 `build/web/build-manifest.json`을 ma
 | 턴 무결성 | 해결 중 추가 입력이나 중복 턴 종료로 여러 발 또는 결과가 겹친다 | 명시적 상태 전이와 해결·오류 중 입력 잠금 | REQ-003, REQ-009 |
 | 승패 무결성 | 파괴 처리 순서나 무효 노드 참조 때문에 다중 완파 또는 요새 승리가 누락된다 | 해결 구간의 스냅샷을 한 번 집계한 후 전체 결과를 적용 | REQ-006, REQ-008 |
 | 회귀 신뢰성 | 수동 플레이만으로 희귀한 연쇄 파괴·타임아웃·보존 오류가 출품 빌드에 남는다 | Godot headless 시나리오 검증과 런타임 진단 표시 | REQ-010 |
+| 실제 플레이 가능성 | 초기 속도만 검사해 투사체가 상대 진영에 닿지 않거나 해결 상태가 끝나지 않아 턴이 교착된다 | 양 플레이어의 상대 진영 도달 거리, 경계 정지, 정상 해결과 실제 Web Enter 턴 전환을 종단 검증 | REQ-015, REQ-016, REQ-017 |
 
 Out of scope, and why: E1은 로컬 고정 시나리오이므로 악의적 네트워크 입력, 저장 파일 조작, 치팅 방지와 결정론적 네트워크 동기화는 다루지 않는다. 온라인·영속화 경계가 생기는 후속 기능에서 별도 위협 모델이 필요하다.
 

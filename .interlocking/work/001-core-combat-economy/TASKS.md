@@ -329,3 +329,48 @@
 ## Execution log (continued)
 
 - 2026-08-25: T-017 done at `622afa5`; bounded readiness polling increased to 30 seconds with URL/document/canvas/bridge diagnostics, absent bridges still fail nonzero, and the exact live REQ-014 command passed all 11 cases.
+
+## T-018 Implement playable catapult range and bounded normal resolution
+
+- state:    todo
+- covers:   REQ-015, REQ-016
+- depends:  T-017
+- produces: |
+    scripts/main.gd
+      func launch_solution(player_index: int, weapon_index: int, drag: Vector2) -> Dictionary
+      func stop_projectile_outside_field() -> bool
+      Full-power catapult reaches the opposing deployment boundary; out-of-field projectiles stop and settle; post-resolution HUD advertises Enter
+    tests/regression_runner.gd
+      REQ-015 trajectory/range fixtures and REQ-016 boundary-stop/resolution/input/HUD fixtures
+- verify:   .\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-015
+
+## T-019 Extend the browser bridge and harness through resolved Enter turn transition
+
+- state:    todo
+- covers:   REQ-017
+- depends:  T-018
+- produces: |
+    scripts/main.gd
+      func web_test_snapshot() -> Dictionary
+      Exposes projectile position/time samples, round, camera orientation, and interaction state
+    tests/web/run_browser_regression.mjs
+      Local and deployed E2E case sends real 240px drag, blocked pre-resolution Enter, waits for resolving-to-ready, then sends Enter and proves player 2/round 1/HUD/camera/input
+- verify:   node tests/web/run_browser_regression.mjs --base-url http://127.0.0.1:8060 --serve build/web --requirements REQ-015,REQ-016,REQ-017 --evidence build/web-evidence/local-e2e
+
+## T-020 Export, deploy, and verify the playable-turn Web build
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-019
+- produces: |
+    build/web/**
+      Current Godot Web export containing T-018/T-019
+    build/web/build-manifest.json
+      Approved source commit and SHA-256 for all deployed assets
+- verify:   node tests/web/run_browser_regression.mjs --base-url https://seo077.github.io/block_siege/ --requirements REQ-015,REQ-016,REQ-017 --manifest build/web/build-manifest.json --evidence build/web-evidence/deployed-e2e
+
+## Execution log (continued)
+
+- 2026-08-25: T-018 done at `060df7f`; both-player 40/120/240 range progression, full-power opposing-zone reach, all field boundary stops, exactly-once normal resolution, resolving Enter lock, and ready HUD guidance passed REQ-015/016.
+- 2026-08-25: T-019 done at `86ee66e`; measured projectile-only spin was corrected with physical angular damping/friction, and repeated real Chrome runs passed opposing-zone reach, no timeout, resolving Enter lock, ready transition, and exactly-once player-2 turn change.
+- 2026-08-25: T-020 done at `9f27abc`; Pages workflow 32755631110 succeeded, live manifest source was 86ee66e, and deployed Chrome evidence passed 11 legacy cases plus 182-sample reach/resolution/Enter lifecycle with a visually confirmed player-2 ready HUD.

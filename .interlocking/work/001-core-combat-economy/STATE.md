@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "f54a53a5"
-next_action: "Run fresh independent acceptance verification after T-021/T-022"
+next_action: "Run fresh independent acceptance verification after T-023"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
-head_commit: "c93e453"
+head_commit: "a9010d9"
 updated_at: "2026-08-25"
 ---
 
@@ -95,3 +95,5 @@ updated_at: "2026-08-25"
 - 2026-08-25: Independent verification returned 15 PASS, REQ-017 FAIL from a repeated local timeout, and REQ-014 INCONCLUSIVE from unavailable verifier network; appended T-021 after exhausting T-019 retries.
 - 2026-08-25: Completed T-021 at b17d402; deterministic physical damping/impulse parameters preserved x=20 reach and passed five consecutive local lifecycle E2E runs without forced settling.
 - 2026-08-25: Completed T-022 at c93e453; Pages workflow 32759884762 succeeded and the b17d402 live build passed the full deployed reach/resolution/Enter lifecycle.
+- 2026-08-25: Independent verification passed REQ-001 through REQ-013 and REQ-015 through REQ-017, but failed REQ-014 because workflow success was declared rather than independently queried; appended T-023.
+- 2026-08-25: Completed T-023 at a9010d9; live REQ-014 now independently binds a successful Pages workflow run head manifest to approved local and live manifest bytes.

@@ -402,3 +402,18 @@
 
 - 2026-08-25: T-021 done at `b17d402`; paired 32.0 max catapult impulse with 0.2 linear and 40 angular projectile damping, preserving reach while passing the exact local lifecycle E2E five consecutive times and all relevant headless regressions.
 - 2026-08-25: T-022 done at `c93e453`; Pages workflow 32759884762 succeeded, live manifest bound b17d402, and the deployed lifecycle E2E passed opposing-zone reach, natural resolution, and player-2 turn transition.
+- 2026-08-25: Independent verification of `a6dea47..5bded74` returned 16 PASS and REQ-014 FAIL because the harness labeled workflow success as declared rather than independently querying and binding the Pages run; added T-023.
+
+## T-023 Bind deployed evidence to an independently verified Pages workflow run
+
+- state:    todo
+- covers:   REQ-014
+- depends:  T-022
+- produces: |
+    tests/web/run_browser_regression.mjs
+      Queries the public GitHub Actions Pages workflow API, requires a completed successful master run, fetches build/web/build-manifest.json at that run head SHA, and proves it equals both approved local and live manifests before recording workflow id/SHA/status/conclusion/URL
+- verify:   node tests/web/run_browser_regression.mjs --base-url https://seo077.github.io/block_siege/ --requirements REQ-012,REQ-013,REQ-014 --manifest build/web/build-manifest.json --evidence build/web-evidence/deployed
+
+## Execution log (continued)
+
+- 2026-08-25: T-023 done at `a9010d9`; deployed verification now requires a real completed-successful master Pages run whose head commit raw manifest exactly matches approved local and live manifests, and records the independently queried workflow evidence.

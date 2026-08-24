@@ -389,6 +389,7 @@ func freeze_timeout_bodies() -> void:
 func advance_resolution(delta: float) -> void:
 	if resolution_state == null:
 		return
+	stop_projectile_outside_field()
 	var result := resolution_state.advance_fixed_tick(delta, collect_resolution_motion())
 	resolve_elapsed = resolution_state.elapsed
 	quiet_elapsed = resolution_state.quiet_elapsed
@@ -464,13 +465,33 @@ func launch_solution(player_index: int, weapon_index: int, drag: Vector2) -> Dic
 	var base_elevation := 0.72 if weapon_index == 0 else 0.16
 	var elevation := clampf(base_elevation - drag.y / 360.0, 0.05, 1.25)
 	var direction := (forward + camera_right * lateral + Vector3.UP * elevation).normalized()
-	var impulse_magnitude := lerpf(4.0, 18.0, clampf(drag.length(), 24.0, 240.0) / 240.0)
+	# A catapult's useful power band must span the field, while retaining enough
+	# separation between short, medium, and full drags to make aiming meaningful.
+	var minimum_impulse := 7.0 if weapon_index == 0 else 4.0
+	var maximum_impulse := 27.0 if weapon_index == 0 else 18.0
+	var power_ratio := clampf((drag.length() - 24.0) / 216.0, 0.0, 1.0)
+	var impulse_magnitude := lerpf(minimum_impulse, maximum_impulse, power_ratio)
 	return {
 		"accepted": true,
 		"normalized_direction": direction,
 		"impulse_magnitude": impulse_magnitude,
 		"impulse": direction * impulse_magnitude,
 	}
+
+
+func stop_projectile_outside_field() -> bool:
+	if resolution_state == null:
+		return false
+	var projectile := body_for_block(resolution_state.shot_block_id)
+	if projectile == null or not is_instance_valid(projectile):
+		return false
+	var position := projectile.global_position if projectile.is_inside_tree() else projectile.position
+	if absf(position.x) < FIELD_SIZE.x * 0.5 and absf(position.z) < FIELD_SIZE.y * 0.5 and position.y >= -2.0:
+		return false
+	projectile.linear_velocity = Vector3.ZERO
+	projectile.angular_velocity = Vector3.ZERO
+	projectile.freeze = true
+	return true
 
 
 func web_test_snapshot() -> Dictionary:
@@ -577,6 +598,8 @@ func spawn_projectile(block_id: int, origin: Vector3, impulse: Vector3) -> Siege
 		projectile.position = origin
 	projectile.linear_velocity = Vector3.ZERO
 	projectile.angular_velocity = Vector3.ZERO
+	projectile.linear_damp = 0.08
+	projectile.angular_damp = 2.0
 	projectile.add_to_group("projectile")
 	projectile.apply_central_impulse(impulse)
 	return projectile

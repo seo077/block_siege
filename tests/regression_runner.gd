@@ -62,6 +62,10 @@ func run_requirement(requirement: String) -> bool:
 			return _verify_utf8_hud()
 		"REQ-013":
 			return _verify_drag_launch()
+		"REQ-015":
+			return _verify_catapult_range()
+		"REQ-016":
+			return _verify_bounded_resolution()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -168,6 +172,86 @@ func _verify_drag_launch() -> bool:
 		impulses.append(main.launch_solution(0, 0, Vector2(length, 0)).impulse_magnitude)
 	main.free()
 	return impulses[0] < impulses[1] and impulses[1] < impulses[2]
+
+func _sample_catapult_progress(player_index: int, drag_length: float) -> Dictionary:
+	var main := Main.new()
+	var solution: Dictionary = main.launch_solution(player_index, 0, Vector2(0, -drag_length))
+	main.free()
+	if not solution.get("accepted", false):
+		return {"maximum": -INF, "behind": true, "reached": false}
+	var direction_sign := 1.0 if player_index == 0 else -1.0
+	var origin_x := -23.5 if player_index == 0 else 23.5
+	var position := Vector3(origin_x, 0.55, -2.0)
+	var velocity: Vector3 = solution.impulse
+	var maximum := 0.0
+	var behind := false
+	var reached := false
+	for tick in 800:
+		velocity += Vector3.DOWN * 9.8 * 0.01
+		position += velocity * 0.01
+		var progress := (position.x - origin_x) * direction_sign
+		maximum = maxf(maximum, progress)
+		behind = behind or progress < -0.0001
+		if (player_index == 0 and position.x >= 20.0) or (player_index == 1 and position.x <= -20.0):
+			reached = true
+		if position.y <= 0.1:
+			break
+	return {"maximum": maximum, "behind": behind, "reached": reached}
+
+func _verify_catapult_range() -> bool:
+	for player_index in 2:
+		var samples: Array = []
+		for drag_length in [40.0, 120.0, 240.0]:
+			samples.append(_sample_catapult_progress(player_index, drag_length))
+		if samples.any(func(sample): return sample.behind):
+			return false
+		if not (samples[0].maximum < samples[1].maximum and samples[1].maximum < samples[2].maximum):
+			return false
+		if not samples[2].reached:
+			return false
+	return true
+
+func _verify_bounded_resolution() -> bool:
+	for boundary_position in [Vector3(30.0, 1.0, 0.0), Vector3(-30.0, 1.0, 0.0), Vector3(0.0, 1.0, 15.0), Vector3(0.0, 1.0, -15.0), Vector3(0.0, -2.01, 0.0)]:
+		var main := Main.new()
+		root.add_child(main)
+		main.create_match()
+		var attacker = main.match_state.players[0]
+		if not main.fire_weapon(attacker.id, attacker.weapons[0].id, Vector2(0, -240)):
+			main.free()
+			return false
+		var shot_id: int = main.resolution_state.shot_block_id
+		var projectile = main.body_for_block(shot_id)
+		projectile.position = boundary_position
+		projectile.linear_velocity = Vector3(3, 4, 5)
+		projectile.angular_velocity = Vector3.ONE
+		if not main.stop_projectile_outside_field() or not projectile.freeze:
+			main.free()
+			return false
+		if projectile.linear_velocity != Vector3.ZERO or projectile.angular_velocity != Vector3.ZERO or main.body_for_block(shot_id) != projectile:
+			main.free()
+			return false
+		var turn_before: int = main.match_state.active_player_id
+		main.end_turn()
+		if main.match_state.active_player_id != turn_before:
+			main.free()
+			return false
+		for tick in 15:
+			main.advance_resolution(0.1)
+		if main.current_adjudication_state() not in [&"ready", &"final"] or main.match_state.resolution_apply_count() != 1:
+			main.free()
+			return false
+		main.finish_shot_resolution()
+		if main.match_state.resolution_apply_count() != 1:
+			main.free()
+			return false
+		main.create_ui()
+		main.update_ui()
+		if main.current_adjudication_state() == &"ready" and not main.hint_label.text.contains("[Enter]: 턴 종료"):
+			main.free()
+			return false
+		main.free()
+	return true
 
 func _verify_fixed_scenario() -> bool:
 	var first := FixedScenario.build()

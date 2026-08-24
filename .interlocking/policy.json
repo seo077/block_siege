@@ -21,7 +21,9 @@
   "_verify": "Commands the verifier subagent is allowed to run. It has no other execution rights.",
   "verify": {
     "commands": [
-      ".\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement *"
+      ".\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement *",
+      "node tests/web/run_browser_regression.mjs --base-url http://127.0.0.1:8060 --serve build/web --requirements REQ-012,REQ-013 --evidence build/web-evidence/local",
+      "node tests/web/run_browser_regression.mjs --base-url https://seo077.github.io/block_siege/ --requirements REQ-012,REQ-013,REQ-014 --manifest build/web/build-manifest.json --evidence build/web-evidence/deployed"
     ]
   },
 

@@ -266,3 +266,50 @@
 ## Execution log (continued)
 
 - 2026-08-24: T-013 done at `98f8c8e`; the actual `main.tscn` scene passed initial/resolving/timeout state and independent 200-count checks, and Retry preserved shot ID 10 while immediately refreshing the HUD. REQ-010-UI and REQ-010 repeated twice passed.
+
+## T-014 Fix UTF-8 HUD strings and deterministic drag launch semantics
+
+- state:    todo
+- covers:   REQ-012, REQ-013
+- depends:  T-013
+- produces: |
+    scripts/main.gd
+      const APPROVED_KOREAN_STRINGS: PackedStringArray
+      func launch_solution(player_index: int, weapon_index: int, drag: Vector2) -> Dictionary
+      func web_test_snapshot() -> Dictionary
+      Rejects drags shorter than 24 px and maps camera-relative lateral/elevation plus monotonic 40/120/240 px impulse
+    tests/regression_runner.gd
+      REQ-012 and REQ-013 headless string/launch boundary verification
+- verify:   .\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-012
+
+## T-015 Add the real-browser CDP regression harness and Godot Web bridge
+
+- state:    todo
+- covers:   REQ-012, REQ-013
+- depends:  T-014
+- produces: |
+    scripts/main.gd
+      globalThis.__BLOCK_SIEGE_TEST__.snapshot() and reset() read-only Web bridge
+    tests/web/run_browser_regression.mjs
+      Dependency-free Node 24 CDP runner with local static server, real canvas pointer cases, JSON evidence, and PNG screenshots
+- verify:   node tests/web/run_browser_regression.mjs --base-url http://127.0.0.1:8060 --serve build/web --requirements REQ-012,REQ-013 --evidence build/web-evidence/local
+
+## T-016 Export, manifest, deploy, and verify the approved Web build
+
+- state:    todo
+- covers:   REQ-014
+- depends:  T-015
+- produces: |
+    build/web/**
+      Current Godot Web export
+    build/web/build-manifest.json
+      source_commit and SHA-256 for every deployed target asset
+    .github/workflows/pages.yml
+      Existing Pages workflow deploys the manifest-bearing build
+- verify:   node tests/web/run_browser_regression.mjs --base-url https://seo077.github.io/block_siege/ --requirements REQ-012,REQ-013,REQ-014 --manifest build/web/build-manifest.json --evidence build/web-evidence/deployed
+
+## Execution log (continued)
+
+- 2026-08-24: T-014 done at `8767c21`; UTF-8 Korean oracle/runtime strings and deterministic 24px drag boundary, camera-relative direction, elevation, and monotonic impulse passed REQ-012, REQ-013, REQ-003, and REQ-010-UI.
+- 2026-08-25: T-015 done at `e16602f`; bundled Noto Sans KR renders without tofu, and the dependency-free CDP harness passed 11 isolated real-canvas cases with missing-glyph, HUD, pointer, launch, JSON, and PNG evidence.
+- 2026-08-25: T-016 done at `cb87a97`; GitHub Pages workflow run 32743643892 succeeded, the deployed manifest matched all 10 approved asset hashes, and 11 live Chrome canvas cases passed REQ-012 through REQ-014 with visually inspected Korean HUD evidence.

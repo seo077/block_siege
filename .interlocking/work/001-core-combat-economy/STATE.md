@@ -4,21 +4,21 @@ feature: 001-core-combat-economy
 phase: SPEC
 size: feature
 gates_passed: [G0]
-spec_sha256: "59725d80"
-next_action: "E1 complete; select and spec the next roadmap slice before further code changes"
+spec_sha256: "a5372bcc"
+next_action: "Run fresh independent acceptance verification for REQ-001 through REQ-014"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "af88318"
-head_commit: "af88318"
-updated_at: "2026-08-24"
+head_commit: "cb87a97"
+updated_at: "2026-08-25"
 ---
 
 # 001-core-combat-economy
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: G0 approved; T-001 through T-013 implemented; independent verification passed all 11 requirements with 0 failures and 0 inconclusive results.
-- Now: E1 is complete; the next code change should begin only after selecting and approving the next roadmap slice.
+- Done: T-001 through T-013 implemented and the prior 11 internal/headless requirements passed.
+- Now: E1 is reopened because the deployed browser path exposed broken Korean text and unusable drag firing that prior criteria did not cover.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -72,3 +72,15 @@ updated_at: "2026-08-24"
 - 2026-08-24: Completed T-013 at 98f8c8e; actual play-scene initial/resolving/timeout diagnostics, independent scene/ledger totals, and same-shot Retry refresh passed, as did REQ-010 repeated twice.
 - 2026-08-24: Human directed uninterrupted E1 completion, approving replacement of the stale verifier command with the exact repository-local PowerShell Godot runner.
 - 2026-08-24: Fresh independent verification of 2d6b45c..af88318 returned PASS for all 11 requirements with 0 failures and 0 inconclusive results; E1 is complete.
+- 2026-08-24: User rejected the E1 completion after observing mojibake and ineffective mouse drag on the deployed site; reopened E1 with REQ-012 UTF-8 UI, REQ-013 browser drag semantics, and REQ-014 deployed-browser smoke coverage.
+- 2026-08-24: Independent review returned NOT YET for REQ-012 through REQ-014 because the spec lacks a deterministic repository-owned browser harness, string inventory/extraction method, launch instrumentation, deployment authority, and hash evidence format.
+- 2026-08-24: Human approved a repository-owned Node 24 CDP harness with Godot read-only telemetry, real canvas pointer events, screenshot/JSON evidence, and local/deployed manifest hash comparison.
+- 2026-08-24: Independent review returned NOT YET because REQ-012 through REQ-014 criteria had no runnable command; fixed the contract to exact Node commands, bridge schema, manifest path, and evidence outputs.
+- 2026-08-24: Review exposed a contradiction between REQ-014 and the old Web-deployment exclusion; recorded authorization to commit/push build/web through the existing Pages workflow and narrowed out-of-scope to performance and multi-browser certification.
+- 2026-08-24: Independent review found the Korean-string oracle could share implementation errors; bound REQ-012 to an exact normative Korean string/format inventory in SPEC for verifier-controlled comparison.
+- 2026-08-24: Independent review found REQ-001 criteria relied on unstated 6/3/2 structure allocation; made the existing fixed-scenario allocation explicit in REQ-001.
+- 2026-08-24: Independent critic reviewed spec a5372bcc and criteria 3a7ccb62 and returned READY for the reopened browser-quality E1 scope; G0 awaits the human.
+- 2026-08-24: Human approved G0 for spec a5372bcc and criteria 3a7ccb62; code edits are unlocked for REQ-012 through REQ-014.
+- 2026-08-24: Completed T-014 at 8767c21; corrected Korean runtime strings and measurable drag launch semantics passed REQ-012/013 plus existing firing/UI regressions.
+- 2026-08-25: Completed T-015 at e16602f; actual Chrome canvas tests passed 11 cases, bundled Noto Sans KR rendered correctly in inspected PNG, and missing-glyph telemetry was empty.
+- 2026-08-25: Completed T-016 at cb87a97; pushed the manifest-bearing Web export, Pages workflow 32743643892 succeeded, all 10 deployed hashes matched, and live Chrome evidence passed REQ-012 through REQ-014 with Korean rendering visually confirmed.

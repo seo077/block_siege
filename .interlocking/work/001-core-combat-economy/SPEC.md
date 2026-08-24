@@ -48,6 +48,21 @@ DEC-006 플레이 화면 회귀 의무를 별도 요구사항으로 분리한다
   Answer: "네" — 초기·해결 중·타임아웃 UI와 Retry 동일 발사 재개·화면 갱신을 독립 요구사항으로 판정한다.
   Lands in: REQ-011
 
+DEC-007 E1 완료는 실제 배포 웹사이트의 한국어와 드래그 발사를 포함한다.
+  Asked: 완료 보고 뒤 사용자가 웹사이트의 한국어가 깨지고 마우스 드래그 발사가 제대로 작동하지 않는다고 지적했으며, 실제 웹 사용자 경로를 고치라고 요청했다.
+  Answer: "그럼 고쳐 뭐해" — 내부 상태 테스트가 아니라 배포 웹사이트에서 한국어와 포인터 발사를 직접 검증하고 수정한다.
+  Lands in: REQ-012, REQ-013, REQ-014
+
+DEC-008 브라우저 검증은 저장소 소유의 무의존성 Chrome DevTools Protocol 하네스로 자동화한다.
+  Asked: REQ-012~014가 브라우저·문자열·발사 계측·배포 검증 절차 부재로 독립 판정 불가하다는 비평 뒤, 저장소 자체 브라우저 하네스를 만들지 확인했다.
+  Answer: "ㅇㅇ" — Node 24와 설치된 Chrome/Edge를 사용해 실제 캔버스 포인터 입력, HUD/발사 계측, 스크린샷, 배포 해시를 재현 가능하게 검증한다.
+  Lands in: REQ-012, REQ-013, REQ-014
+
+DEC-009 수정된 Web export를 GitHub Pages에 실제 배포한다.
+  Asked: 배포 사이트에서 재현된 결함을 고치라는 요청이 로컬 수정뿐 아니라 실제 사이트 갱신까지 포함하는지 판단했다.
+  Answer: "그럼 고쳐 뭐해" 및 후속 승인 — `build/web`을 갱신해 master에 커밋·푸시하고 Pages workflow로 배포한 뒤 실제 URL을 검증한다.
+  Lands in: REQ-014
+
 ## Size
 
 `feature`
@@ -58,7 +73,7 @@ E1은 10개 요구사항과 약 10–15개 구현 작업으로 한 명의 검증
 
 ## Requirements
 
-REQ-001 새 경기는 고정 전투 시나리오로 시작하며, 각 플레이어가 요새 1개, 장전된 투석기 1대, 장전된 전차 1대와 예비 블럭 87개를 소유해 플레이어당 100개, 전체 200개 블럭을 구성한다.
+REQ-001 새 경기는 고정 전투 시나리오로 시작하며, 각 플레이어가 구조 블럭 6개의 요새 1개, 구조 블럭 3개와 장전 블럭 1개의 투석기 1대, 구조 블럭 2개와 장전 블럭 1개의 전차 1대, 예비 블럭 87개를 소유해 플레이어당 100개, 전체 200개 블럭을 구성한다.
 
 REQ-002 핵심 경기 상태는 장면 노드나 2인 전용 쌍 배열을 참조하지 않고 각 플레이어의 식별자·예비 블럭·요새·병기·턴별 행동 상태를 동일한 형태의 플레이어 목록 항목으로 표현한다.
 
@@ -83,6 +98,28 @@ REQ-010 프로젝트는 Godot 4 headless 실행으로 고정 시나리오 초기
 Windows PowerShell에서 회귀 명령의 실행 파일 표기는 저장소 루트 기준으로 정확히 `.\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe`로 시작해야 하며, 드라이브 루트로 해석되는 `\.\.tools` 표기를 사용해서는 안 된다.
 
 REQ-011 저장소 로컬 회귀 진입점은 플레이 장면을 생성하여 초기·해결 중·타임아웃 상태 각각에서 화면의 판정 상태명과 전체 블럭 수 표시를 읽고, 표시된 수량이 장면과 경기 상태에서 독립 집계한 수량과 일치하는지 확인해야 한다. 타임아웃 상태에서는 오류 표시와 Retry 컨트롤의 존재·활성 상태를 확인하고, Retry를 작동시켰을 때 같은 발사가 재개되며 화면 상태가 갱신되는지를 명시적인 성공·실패 결과로 보고해야 한다.
+
+REQ-012 플레이 화면에 제공되는 모든 한국어 문자열은 UTF-8 원문 그대로 표시되어야 하며, 소스·Web export·브라우저 화면 어느 단계에서도 잘못된 문자 인코딩으로 변환된 문자열이나 대체 문자가 나타나서는 안 된다.
+
+프로젝트는 Node 24와 설치된 Chrome 또는 Edge의 DevTools Protocol만 사용하는 저장소 소유 브라우저 회귀 하네스를 제공해야 한다. Godot Web 런타임은 현재 HUD 컨트롤의 실제 텍스트와 승인된 한국어 문자열 목록을 읽기 전용 테스트 브리지로 노출해야 하며, 하네스는 두 목록의 문자 단위 일치, U+FFFD 및 알려진 UTF-8→레거시 인코딩 오염 패턴 부재를 검사하고 브라우저 스크린샷과 JSON 결과를 남겨야 한다.
+
+로컬 REQ-012·REQ-013의 표준 검증 명령은 `node tests/web/run_browser_regression.mjs --base-url http://127.0.0.1:8060 --serve build/web --requirements REQ-012,REQ-013 --evidence build/web-evidence/local`이어야 하며, 성공 시 `build/web-evidence/local/result.json`과 PNG 스크린샷을 생성하고 실패 시 0이 아닌 종료 코드를 반환해야 한다.
+
+REQ-012의 구현 독립 oracle은 이 승인된 SPEC의 다음 문자열·서식 목록이다: `플레이어 1의 턴`, `[1] 투석기  [2] 전차  |  마우스 드래그: 발사\n전차 선택 중 WASD: 이동  |  [Enter]: 턴 종료`, `투석기 선택`, `전차 선택`, `드래그가 너무 짧습니다`, `이 병기는 이번 턴에 이미 발사했습니다`, `이 병기는 장전되지 않았습니다`, `물리 판정 중…`, `발사 판정 완료`, `플레이어 %d 승리 — 요새 완파`, `턴 전환`, `플레이어 %d 판정승`, `무승부`, `라운드 %d/%d  |  플레이어 %d  |  %s`, `예비 블럭 P1: %d  P2: %d  |  %s`, `프로토타입 종료`, `투석기`, `전차`. 하네스와 테스트 브리지는 이 목록을 구현 파일에서 복제해 oracle로 삼지 않고, 검증 패킷이 인용한 SPEC 목록과 런타임 HUD를 비교해야 한다.
+
+REQ-013 웹 플레이 화면에서 활성 플레이어가 마우스 왼쪽 버튼을 누르고 드래그한 뒤 놓으면, 24픽셀 미만 드래그는 발사하지 않고 그 이상은 정확히 한 발을 발사해야 한다. 화면 좌우 드래그는 같은 방향의 좌우 조준 변화로, 위쪽 드래그는 더 높은 발사각으로 반영되어야 하며, 40·120·240픽셀 드래그의 발사 충격량은 그 순서대로 단조 증가해야 한다. 두 플레이어 모두 자기 카메라에서 상대 진영을 향해 같은 조작 의미를 가져야 한다.
+
+브라우저 회귀 하네스는 새 게임을 다시 로드한 각 독립 사례에서 실제 게임 캔버스에 포인터 press→move→release 이벤트를 보내야 한다. 읽기 전용 테스트 브리지는 수신한 포인터 좌표, 생성된 발사 ID, 초기 선형 속도·충격량·정규화 방향과 판정 상태를 노출해야 하며, 하네스는 모든 경계·방향·출력 사례를 비교해 하나라도 다르면 0이 아닌 종료 코드로 실패해야 한다.
+
+브리지 계약은 브라우저 전역 `globalThis.__BLOCK_SIEGE_TEST__`의 JSON 직렬화 가능한 `snapshot()`과 `reset()`으로 고정하며, snapshot은 `hud_strings`, `approved_korean_strings`, `pointer_events`, `shot_id`, `shot_count`, `initial_velocity`, `impulse_magnitude`, `normalized_direction`, `active_player`, `adjudication_state` 필드를 제공해야 한다.
+
+REQ-014 현재 승인 소스에서 생성한 Web export를 배포하고, 배포 URL을 실제 브라우저에서 새로 열었을 때 게임 캔버스와 한국어 HUD가 로드되어야 한다. 브라우저 포인터 press→move→release 조작으로 REQ-013의 발사가 발생하고 화면 상태가 resolving으로 바뀌는 것을 배포 산출물에서 확인해야 한다.
+
+Web export는 소스 커밋과 배포 대상 파일별 SHA-256을 담은 기계 판독 가능한 manifest를 포함해야 한다. 브라우저 회귀 하네스는 로컬 HTTP 서버와 `https://seo077.github.io/block_siege/` 양쪽에서 같은 검사를 실행하고, 배포 manifest의 소스 커밋·자산 해시가 현재 승인 빌드와 일치하지 않거나 캔버스·한국어 HUD·포인터 발사·ready→resolving 전이가 확인되지 않으면 실패해야 한다. 성공 증거는 base URL, 커밋, 해시 비교, HUD 문자열, 포인터/발사 계측과 스크린샷 경로를 포함한 JSON으로 남겨야 한다.
+
+manifest 경로는 `build/web/build-manifest.json`으로 고정하고 `source_commit` 및 `assets`의 상대 경로별 SHA-256을 포함해야 한다. 배포 검증의 표준 명령은 `node tests/web/run_browser_regression.mjs --base-url https://seo077.github.io/block_siege/ --requirements REQ-012,REQ-013,REQ-014 --manifest build/web/build-manifest.json --evidence build/web-evidence/deployed`이며, 성공 시 `build/web-evidence/deployed/result.json`과 PNG 스크린샷을 생성해야 한다.
+
+REQ-014 완료를 위해 `build/web/**`과 `build/web/build-manifest.json`을 master에 커밋·푸시하고 `.github/workflows/pages.yml`의 GitHub Pages 배포를 실행하는 외부 변경을 허용한다. 검증자는 배포 URL과 자산을 읽기 위한 네트워크 접근이 필요하며, workflow 결과와 배포 manifest를 증거 JSON에 기록해야 한다.
 
 ## Threat model
 
@@ -109,5 +146,5 @@ None.
 - 전차의 턴당 10 BL 이동 예산, 20 BL 사거리와 바리케이드
 - 요새 수동 재건·개축 및 진영 밖 잔해 회수 조작
 - 완성형 궤적·사거리·이동량 UI, 튜토리얼, 아트와 오디오
-- Web export 제작·배포·브라우저 성능 인증
+- Web export의 프레임률·메모리·로딩 시간 성능 최적화 및 다중 브라우저 인증
 - 온라인 대전, AI, 리플레이와 결정론적 네트워크 물리

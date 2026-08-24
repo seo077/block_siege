@@ -17,6 +17,11 @@ func setup(p_block_id: int, p_owner_id: int, p_object_id: int, color: Color, fro
 	is_ammo = p_is_ammo
 	mass = 1.0
 	freeze = frozen_block
+	# Wooden siege pieces dissipate collision energy quickly and may naturally
+	# enter Godot's sleep state once their motion falls below engine thresholds.
+	linear_damp = 10.0
+	angular_damp = 10.0
+	can_sleep = true
 	contact_monitor = true
 	max_contacts_reported = 8
 

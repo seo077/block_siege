@@ -161,7 +161,7 @@ async function dragCase(cdp, baseUrl, evidence, name, dx, dy, player = 0) {
   if (player === 1) {
     await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
     await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
-    await delay(100);
+    await delay(16);
   }
   await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
   await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + cssDx, y: y + cssDy, button: 'left', buttons: 1 });
@@ -171,6 +171,60 @@ async function dragCase(cdp, baseUrl, evidence, name, dx, dy, player = 0) {
   const screenshot = join(evidence, `${name}.png`); await writeFile(screenshot, Buffer.from(png.data, 'base64'));
   await cdp.send('Target.closeTarget', { targetId: page.targetId });
   return { name, drag: [dx, dy], screenshot, ...snapshot };
+}
+
+async function pressEnter(client) {
+  await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+}
+
+async function turnLifecycleCase(cdp, baseUrl, evidence) {
+  console.log('CASE turn-lifecycle');
+  const page = await freshPage(cdp, baseUrl), { client, rect } = page;
+  const x = rect.x + rect.w * .5, y = rect.y + rect.h * .65;
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button: 'none', buttons: 0 });
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x + 100, y: y + 100, button: 'none', buttons: 0 });
+  const calibration = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
+  const moves = calibration.pointer_events.filter(event => event.type === 'move').slice(-2);
+  assert(moves.length === 2, 'turn-lifecycle: pointer calibration unavailable');
+  const scaleY = (moves[1].y - moves[0].y) / 100;
+  const cssDy = -240.9 / scaleY;
+  await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y: y + cssDy, button: 'left', buttons: 1 });
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y: y + cssDy, button: 'left', buttons: 0, clickCount: 1 });
+  const samples = [];
+  let snapshot = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
+  assert(snapshot.adjudication_state === 'resolving' && snapshot.active_player === 0 && snapshot.round === 1, 'turn-lifecycle: real 240px drag did not begin P1 resolution');
+  assert(snapshot.interaction_enabled === false, 'turn-lifecycle: input enabled while resolving');
+  await pressEnter(client); await delay(100);
+  const during = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
+  assert(during.active_player === 0 && during.round === 1, 'turn-lifecycle: Enter during resolution changed turn');
+  const deadline = Date.now() + 8000;
+  let reached = false, sawReady = false;
+  while (Date.now() < deadline) {
+    snapshot = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
+    samples.push({ timestamp_ms: Date.now(), resolve_elapsed: snapshot.resolve_elapsed, position: snapshot.projectile_position, state: snapshot.adjudication_state, active_player: snapshot.active_player, round: snapshot.round, interaction_enabled: snapshot.interaction_enabled });
+    if (snapshot.projectile_position?.[0] >= 20 || snapshot.projectile_samples?.some(sample => sample.position?.[0] >= 20)) reached = true;
+    assert(snapshot.adjudication_state !== 'timeout', 'turn-lifecycle: resolution timed out');
+    if (snapshot.adjudication_state === 'ready') { sawReady = true; break; }
+	await delay(16);
+  }
+  assert(reached, 'turn-lifecycle: projectile did not reach x >= 20 within 8.0s');
+  assert(sawReady && snapshot.active_player === 0 && snapshot.round === 1 && snapshot.interaction_enabled, 'turn-lifecycle: resolving did not return to ready P1 input');
+  const p1Camera = snapshot.camera_position;
+  await pressEnter(client); await delay(150);
+  const after = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
+  assert(after.active_player === 1 && after.round === 1 && after.adjudication_state === 'ready' && after.interaction_enabled, 'turn-lifecycle: one Enter did not enable ready P2 in round 1');
+  assert(p1Camera[0] < 0 && after.camera_position[0] > 0 && after.camera_forward[0] < 0, 'turn-lifecycle: P2 camera did not refresh orientation');
+  assert(after.hud_strings[0].includes('2'), 'turn-lifecycle: P2 HUD did not refresh');
+  await delay(150);
+  const stable = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
+  assert(stable.active_player === 1 && stable.round === 1, 'turn-lifecycle: turn changed more than once');
+  assert(after.pointer_events.some(e => e.type === 'press') && after.pointer_events.some(e => e.type === 'move') && after.pointer_events.some(e => e.type === 'release'), 'turn-lifecycle: missing real canvas pointer events');
+  const png = await client.send('Page.captureScreenshot', { format: 'png' });
+  const screenshot = join(evidence, 'turn-lifecycle.png'); await writeFile(screenshot, Buffer.from(png.data, 'base64'));
+  await cdp.send('Target.closeTarget', { targetId: page.targetId });
+  return { name: 'turn-lifecycle', drag: [0, -240], during_resolution_enter: during, samples, reached_x_20: reached, resolved_ready: sawReady, after_turn: after, stable, screenshot };
 }
 
 async function utf8Checks(serveDir, runtime) {
@@ -252,6 +306,7 @@ async function main() {
     assert(by['player-2'].active_player === 1 && by['player-2'].normalized_direction[0] < 0, 'player 2 not opponent-facing');
     assert(Math.sign(by['player-1'].normalized_direction[2]) === -Math.sign(by['player-2'].normalized_direction[2]), 'camera-relative lateral semantics differ');
     for (const c of cases.filter(c => c.shot_count)) { assert(c.shot_id >= 0 && c.initial_velocity.length === 3 && c.impulse_magnitude > 0 && c.normalized_direction.length === 3, `${c.name}: incomplete launch telemetry`); }
+    if (result.requirements.includes('REQ-017')) result.turn_lifecycle = await turnLifecycleCase(chrome.cdp, options['base-url'], evidence);
     if (result.requirements.includes('REQ-014')) result.manifest = await manifestChecks(options.manifest, options['base-url']);
     result.verdict = 'PASS';
   } catch (error) { result.errors.push(error.stack || String(error)); process.exitCode = 1; }

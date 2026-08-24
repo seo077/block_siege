@@ -66,6 +66,7 @@ var web_last_shot_id := -1
 var web_initial_velocity := Vector3.ZERO
 var web_impulse_magnitude := 0.0
 var web_normalized_direction := Vector3.ZERO
+var web_projectile_samples: Array = []
 var web_snapshot_callback: JavaScriptObject
 var web_reset_callback: JavaScriptObject
 
@@ -389,6 +390,10 @@ func freeze_timeout_bodies() -> void:
 func advance_resolution(delta: float) -> void:
 	if resolution_state == null:
 		return
+	var sampled_projectile := body_for_block(resolution_state.shot_block_id)
+	if sampled_projectile != null and is_instance_valid(sampled_projectile):
+		var sampled_position := sampled_projectile.global_position if sampled_projectile.is_inside_tree() else sampled_projectile.position
+		web_projectile_samples.append({"time": resolution_state.elapsed, "position": [sampled_position.x, sampled_position.y, sampled_position.z]})
 	stop_projectile_outside_field()
 	var result := resolution_state.advance_fixed_tick(delta, collect_resolution_motion())
 	resolve_elapsed = resolution_state.elapsed
@@ -499,6 +504,12 @@ func web_test_snapshot() -> Dictionary:
 	for label in [status_label, hint_label, debug_label, adjudication_label, block_total_label, timeout_error_label]:
 		if label != null:
 			hud_strings.append(label.text)
+	var projectile_position: Variant = null
+	if web_last_shot_id >= 0:
+		var projectile := body_for_block(web_last_shot_id)
+		if projectile != null and is_instance_valid(projectile):
+			var position := projectile.global_position if projectile.is_inside_tree() else projectile.position
+			projectile_position = [position.x, position.y, position.z]
 	return {
 		"hud_strings": hud_strings,
 		"approved_korean_strings": APPROVED_KOREAN_STRINGS,
@@ -509,7 +520,15 @@ func web_test_snapshot() -> Dictionary:
 		"impulse_magnitude": web_impulse_magnitude,
 		"normalized_direction": [web_normalized_direction.x, web_normalized_direction.y, web_normalized_direction.z],
 		"active_player": active_player,
+		"round": round_number,
 		"adjudication_state": String(current_adjudication_state()),
+		"interaction_enabled": interaction_enabled,
+		"dragging": dragging,
+		"resolve_elapsed": resolve_elapsed,
+		"projectile_position": projectile_position,
+		"projectile_samples": web_projectile_samples.duplicate(true),
+		"camera_position": [camera.position.x, camera.position.y, camera.position.z],
+		"camera_forward": [-camera.global_basis.z.x, -camera.global_basis.z.y, -camera.global_basis.z.z],
 		"missing_glyph_codepoints": web_missing_glyph_codepoints(),
 	}
 
@@ -568,6 +587,7 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	web_initial_velocity = solution.impulse
 	web_impulse_magnitude = solution.impulse_magnitude
 	web_normalized_direction = solution.normalized_direction
+	web_projectile_samples.clear()
 	weapon_loaded[player_index][weapon_index] = false
 	weapon_fired_this_turn[player_index][weapon_index] = true
 	resolving_shot = true
@@ -599,7 +619,12 @@ func spawn_projectile(block_id: int, origin: Vector3, impulse: Vector3) -> Siege
 	projectile.linear_velocity = Vector3.ZERO
 	projectile.angular_velocity = Vector3.ZERO
 	projectile.linear_damp = 0.08
-	projectile.angular_damp = 2.0
+	projectile.angular_damp = 10.0
+	var projectile_material := PhysicsMaterial.new()
+	projectile_material.friction = 1.0
+	projectile_material.rough = true
+	projectile_material.bounce = 0.0
+	projectile.physics_material_override = projectile_material
 	projectile.add_to_group("projectile")
 	projectile.apply_central_impulse(impulse)
 	return projectile

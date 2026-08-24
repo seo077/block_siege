@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "9cb1ff03"
-next_action: "Create and validate the Web export, then run independent acceptance verification"
+next_action: "Run fresh independent acceptance verification after T-012"
 blocked_on: null
 open_assumptions: []
 last_verified_commit: "2d6b45c"
-head_commit: "2d6b45c"
+head_commit: "1822ea7"
 updated_at: "2026-08-24"
 ---
 
@@ -18,7 +18,7 @@ updated_at: "2026-08-24"
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
 - Done: G0 approved; T-001 through T-011 implemented; individual REQ checks, full acceptance matrix twice, and scene smoke pass with Godot 4.7.2.
-- Now: Produce a Web build, validate its artifacts, then run independent acceptance verification.
+- Now: Run fresh independent acceptance verification after the T-012 correction.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -53,3 +53,6 @@ updated_at: "2026-08-24"
 - 2026-08-24: Integrated core combat transitions into the playable scene at 7e961a8; smoke and REQ-001 through REQ-009 passed; next is T-010.
 - 2026-08-24: Added HUD adjudication/conservation diagnostics and timeout Retry at 3282af9; REQ-010 UI fixture passed; next is T-011.
 - 2026-08-24: Completed T-011 repeatable regression suite at 2d6b45c; REQ-001 through REQ-009, aggregate REQ-010 twice, and scene smoke passed; next is Web export and independent verification.
+- 2026-08-24: Exported and locally validated the Web bundle, added GitHub Pages deployment at a68034b, and pushed master.
+- 2026-08-24: Independent verification returned 8 PASS, REQ-009 FAIL for premature resolving-state callbacks, and REQ-010 INCONCLUSIVE for unavailable execution/manual observation; added T-012.
+- 2026-08-24: Completed T-012 at 1822ea7; REQ-009 and the complete acceptance matrix twice passed, with premature callbacks now inert until fixed-tick settlement authorization.

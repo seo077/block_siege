@@ -230,3 +230,22 @@
 - 2026-08-24: T-009 done at `7e961a8`; playable scene transitions were bound to MatchState and passed smoke plus REQ-001 through REQ-009.
 - 2026-08-24: T-010 done at `3282af9`; HUD adjudication state, conserved total, timeout error, and Retry control passed REQ-010 UI diagnostics.
 - 2026-08-24: T-011 done at `2d6b45c`; individual REQ checks, aggregate acceptance matrix repeated twice, and scene smoke all passed.
+
+## T-012 Gate resolution callbacks on settled adjudication
+
+- state:    todo
+- covers:   REQ-009
+- depends:  T-008, T-011
+- produces: |
+    scripts/core/match_state.gd
+      Explicit settled-resolution authorization that rejects early or duplicate callbacks
+    scripts/main.gd
+      Authorizes model resolution only after fixed-tick adjudication reports resolved
+    tests/regression_runner.gd
+      Resolving-state callback spam fixture plus successful exactly-once settled resolution
+- verify:   godot4 --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-009
+
+## Execution log (continued)
+
+- 2026-08-24: Independent acceptance verification found REQ-009 vulnerable to premature resolving-state callbacks; T-012 added as corrective work. REQ-010 remained inconclusive pending executable and human UI observation.
+- 2026-08-24: T-012 done at `1822ea7`; resolving-state callback spam is inert and settled resolution applies exactly once. REQ-009 and the full matrix repeated twice passed.

@@ -116,14 +116,31 @@ async function freshPage(cdp, baseUrl) {
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
   const client = { send: (method, params = {}) => cdp.send(method, params, sessionId) };
   await client.send('Page.navigate', { url: baseUrl });
-  await delay(2500);
-  for (let i = 0; i < 40; i++) {
+  const startedAt = Date.now(), timeoutMs = 30000, pollMs = 250;
+  let attempts = 0, lastProbe = null, lastEvaluationError = null;
+  while (Date.now() - startedAt < timeoutMs) {
+    attempts++;
     try {
-      if (await evaluate(client, undefined, `!!globalThis.__BLOCK_SIEGE_TEST__ && document.querySelector('canvas')?.width > 0`)) break;
-    } catch {}
-    if (i === 39) throw new Error('Godot canvas/test bridge did not become ready');
-    await delay(100);
+      lastProbe = await Promise.race([evaluate(client, undefined, `(() => {
+        const canvas = document.querySelector('canvas');
+        return {
+          ready: !!globalThis.__BLOCK_SIEGE_TEST__ && (canvas?.width ?? 0) > 0 && (canvas?.height ?? 0) > 0,
+          url: location.href,
+          document_ready_state: document.readyState,
+          canvas_present: !!canvas,
+          canvas_width: canvas?.width ?? 0,
+          canvas_height: canvas?.height ?? 0,
+          bridge_present: !!globalThis.__BLOCK_SIEGE_TEST__,
+          bridge_type: typeof globalThis.__BLOCK_SIEGE_TEST__,
+        };
+      })()`), delay(2000).then(() => { throw new Error('readiness probe timed out after 2000ms'); })]);
+      lastEvaluationError = null;
+      if (lastProbe.ready) break;
+    } catch (error) { lastEvaluationError = error.message || String(error); }
+    await delay(pollMs);
   }
+  const elapsedMs = Date.now() - startedAt;
+  if (!lastProbe?.ready) throw new Error(`Godot canvas/test bridge did not become ready within ${timeoutMs}ms: ${JSON.stringify({ base_url: baseUrl, elapsed_ms: elapsedMs, attempts, last_probe: lastProbe, last_evaluation_error: lastEvaluationError })}`);
   await delay(1000);
   const rect = await evaluate(client, undefined, `(() => { const c=document.querySelector('canvas'),r=c.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height,cw:c.width,ch:c.height}; })()`);
   return { targetId, client, rect };

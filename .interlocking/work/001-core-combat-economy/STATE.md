@@ -1,15 +1,15 @@
 ---
 il_version: 1
 feature: 001-core-combat-economy
-phase: SPEC
+phase: COMPLETE
 size: feature
 gates_passed: [G0]
 spec_sha256: "a5372bcc"
-next_action: "Independently reverify REQ-014 after T-017"
+next_action: "E1 complete; await the next requested epic or feature"
 blocked_on: ""
 open_assumptions: []
-last_verified_commit: "af88318"
-head_commit: "622afa5"
+last_verified_commit: "a6dea47"
+head_commit: "a6dea47"
 updated_at: "2026-08-25"
 ---
 
@@ -86,3 +86,4 @@ updated_at: "2026-08-25"
 - 2026-08-25: Completed T-016 at cb87a97; pushed the manifest-bearing Web export, Pages workflow 32743643892 succeeded, all 10 deployed hashes matched, and live Chrome evidence passed REQ-012 through REQ-014 with Korean rendering visually confirmed.
 - 2026-08-25: Independent verification returned 13 PASS and REQ-014 FAIL because the deployed bridge missed the harness's 6.4-second startup window; appended corrective T-017.
 - 2026-08-25: Completed T-017 at 622afa5; bounded 30-second readiness polling with diagnostic timeout preserved nonzero failure and the live 11-case REQ-014 command passed.
+- 2026-08-25: Fresh independent verification of af88318..a6dea47 returned PASS for all 14 requirements with 0 failures and 0 inconclusive results; E1 is complete with live browser evidence.

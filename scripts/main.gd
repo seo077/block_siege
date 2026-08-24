@@ -473,7 +473,7 @@ func launch_solution(player_index: int, weapon_index: int, drag: Vector2) -> Dic
 	# A catapult's useful power band must span the field, while retaining enough
 	# separation between short, medium, and full drags to make aiming meaningful.
 	var minimum_impulse := 7.0 if weapon_index == 0 else 4.0
-	var maximum_impulse := 27.0 if weapon_index == 0 else 18.0
+	var maximum_impulse := 32.0 if weapon_index == 0 else 18.0
 	var power_ratio := clampf((drag.length() - 24.0) / 216.0, 0.0, 1.0)
 	var impulse_magnitude := lerpf(minimum_impulse, maximum_impulse, power_ratio)
 	return {
@@ -618,8 +618,11 @@ func spawn_projectile(block_id: int, origin: Vector3, impulse: Vector3) -> Siege
 		projectile.position = origin
 	projectile.linear_velocity = Vector3.ZERO
 	projectile.angular_velocity = Vector3.ZERO
-	projectile.linear_damp = 0.08
-	projectile.angular_damp = 10.0
+	projectile.linear_damp = 0.2
+	# The projectile is a thin timber block, so tumbling energy should dissipate
+	# quickly on impact instead of leaving a low-speed rolling contact alive until
+	# the resolution deadline. This remains ordinary per-body physics damping.
+	projectile.angular_damp = 40.0
 	var projectile_material := PhysicsMaterial.new()
 	projectile_material.friction = 1.0
 	projectile_material.rough = true

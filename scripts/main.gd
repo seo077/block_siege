@@ -8,6 +8,26 @@ const ZONE_SIZE := Vector2(10.0, 10.0)
 const MAX_ROUNDS := 20
 const PLAYER_COLORS := [Color("55a8ff"), Color("ff665c")]
 const PROJECTILE_COLORS := [Color("b9dcff"), Color("ffd0cc")]
+const APPROVED_KOREAN_STRINGS: PackedStringArray = [
+	"플레이어 1의 턴",
+	"[1] 투석기  [2] 전차  |  마우스 드래그: 발사\n전차 선택 중 WASD: 이동  |  [Enter]: 턴 종료",
+	"투석기 선택",
+	"전차 선택",
+	"드래그가 너무 짧습니다",
+	"이 병기는 이번 턴에 이미 발사했습니다",
+	"이 병기는 장전되지 않았습니다",
+	"물리 판정 중…",
+	"발사 판정 완료",
+	"플레이어 %d 승리 — 요새 완파",
+	"턴 전환",
+	"플레이어 %d 판정승",
+	"무승부",
+	"라운드 %d/%d  |  플레이어 %d  |  %s",
+	"예비 블럭 P1: %d  P2: %d  |  %s",
+	"프로토타입 종료",
+	"투석기",
+	"전차",
+]
 
 var active_player := 0
 var round_number := 1
@@ -397,6 +417,43 @@ func fire_selected(drag: Vector2) -> void:
 	return
 
 
+func launch_solution(player_index: int, weapon_index: int, drag: Vector2) -> Dictionary:
+	if player_index < 0 or player_index >= 2 or weapon_index < 0 or weapon_index >= 2 or drag.length() < 24.0:
+		return {"accepted": false}
+	var forward := Vector3.RIGHT if player_index == 0 else Vector3.LEFT
+	var camera_right := forward.cross(Vector3.UP).normalized()
+	var lateral := clampf(drag.x / 240.0, -0.75, 0.75)
+	var base_elevation := 0.72 if weapon_index == 0 else 0.16
+	var elevation := clampf(base_elevation - drag.y / 360.0, 0.05, 1.25)
+	var direction := (forward + camera_right * lateral + Vector3.UP * elevation).normalized()
+	var impulse_magnitude := lerpf(4.0, 18.0, clampf(drag.length(), 24.0, 240.0) / 240.0)
+	return {
+		"accepted": true,
+		"normalized_direction": direction,
+		"impulse_magnitude": impulse_magnitude,
+		"impulse": direction * impulse_magnitude,
+	}
+
+
+func web_test_snapshot() -> Dictionary:
+	var hud_strings: PackedStringArray = []
+	for label in [status_label, hint_label, debug_label, adjudication_label, block_total_label, timeout_error_label]:
+		if label != null:
+			hud_strings.append(label.text)
+	return {
+		"hud_strings": hud_strings,
+		"approved_korean_strings": APPROVED_KOREAN_STRINGS,
+		"pointer_events": [],
+		"shot_id": match_state.active_shot_block_id if match_state != null else -1,
+		"shot_count": 1 if match_state != null and match_state.active_shot_block_id >= 0 else 0,
+		"initial_velocity": [],
+		"impulse_magnitude": 0.0,
+		"normalized_direction": [],
+		"active_player": active_player,
+		"adjudication_state": String(current_adjudication_state()),
+	}
+
+
 func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	if match_state == null:
 		return false
@@ -413,6 +470,10 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	var weapon_index := match_state.players[player_index].weapons.find(weapon)
 	if weapon_index < 0 or weapon_index >= weapon_blocks[player_index].size():
 		return false
+	var solution := launch_solution(player_index, weapon_index, drag)
+	if not solution.accepted:
+		update_ui("드래그가 너무 짧습니다")
+		return false
 	var blocks: Array = weapon_blocks[player_index][weapon_index]
 	if blocks.is_empty() or not is_instance_valid(blocks[0]):
 		return false
@@ -427,11 +488,7 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 		origin += block.global_position if block.is_inside_tree() else block.position
 	origin /= blocks.size()
 	var forward := 1.0 if player_index == 0 else -1.0
-	var lateral := clampf(drag.x / 280.0, -0.7, 0.7)
-	var power := clampf(drag.length() / 110.0, 0.8, 3.2)
-	var elevation := 0.72 if weapon_index == 0 else 0.16
-	var direction := Vector3(forward, elevation - drag.y / 900.0, lateral).normalized()
-	var projectile := spawn_projectile(result.block_id, origin + Vector3(forward * 0.8, 0.55, 0), direction * power * (7.2 if weapon_index == 0 else 5.8))
+	var projectile := spawn_projectile(result.block_id, origin + Vector3(forward * 0.8, 0.55, 0), solution.impulse)
 	if projectile == null:
 		return false
 	weapon_loaded[player_index][weapon_index] = false
@@ -448,7 +505,7 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	resolution_error = &""
 	resolution_retry_available = false
 	set_interaction_enabled(false)
-	update_ui("Physics adjudication in progress")
+	update_ui("물리 판정 중…")
 	return true
 
 

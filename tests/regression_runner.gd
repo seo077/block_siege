@@ -58,6 +58,10 @@ func run_requirement(requirement: String) -> bool:
 			return _run_req010(1)
 		"REQ-010-UI":
 			return _verify_ui_diagnostics()
+		"REQ-012":
+			return _verify_utf8_hud()
+		"REQ-013":
+			return _verify_drag_launch()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -110,6 +114,60 @@ func _run_req010(repeat_count: int) -> bool:
 
 func report_failure(requirement, fixture, detail) -> void:
 	push_error("REGRESSION FAILURE requirement=%s fixture=%s detail=%s" % [requirement, fixture, detail])
+
+func _verify_utf8_hud() -> bool:
+	var oracle := PackedStringArray([
+		"플레이어 1의 턴", "[1] 투석기  [2] 전차  |  마우스 드래그: 발사\n전차 선택 중 WASD: 이동  |  [Enter]: 턴 종료",
+		"투석기 선택", "전차 선택", "드래그가 너무 짧습니다", "이 병기는 이번 턴에 이미 발사했습니다",
+		"이 병기는 장전되지 않았습니다", "물리 판정 중…", "발사 판정 완료", "플레이어 %d 승리 — 요새 완파",
+		"턴 전환", "플레이어 %d 판정승", "무승부", "라운드 %d/%d  |  플레이어 %d  |  %s",
+		"예비 블럭 P1: %d  P2: %d  |  %s", "프로토타입 종료", "투석기", "전차",
+	])
+	if Main.APPROVED_KOREAN_STRINGS != oracle:
+		return false
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	if source.contains("�") or source.contains("íˆ¬") or source.contains("ì „"):
+		return false
+	var main := Main.new()
+	root.add_child(main)
+	main.create_match()
+	main.create_ui()
+	var snapshot: Dictionary = main.web_test_snapshot()
+	var passed := snapshot.has_all(["hud_strings", "approved_korean_strings", "pointer_events", "shot_id", "shot_count", "initial_velocity", "impulse_magnitude", "normalized_direction", "active_player", "adjudication_state"])
+	passed = passed and snapshot.approved_korean_strings == oracle and snapshot.hud_strings.has(oracle[1])
+	main.free()
+	return passed and oracle != PackedStringArray(["주입된 불일치"])
+
+func _verify_drag_launch() -> bool:
+	var main := Main.new()
+	root.add_child(main)
+	for player_index in 2:
+		if main.launch_solution(player_index, 0, Vector2(23.999, 0)).accepted:
+			main.free()
+			return false
+		if not main.launch_solution(player_index, 0, Vector2(24, 0)).accepted:
+			main.free()
+			return false
+		var forward := Vector3.RIGHT if player_index == 0 else Vector3.LEFT
+		var camera_right := forward.cross(Vector3.UP).normalized()
+		var right: Dictionary = main.launch_solution(player_index, 0, Vector2(80, 0))
+		var left: Dictionary = main.launch_solution(player_index, 0, Vector2(-80, 0))
+		if right.normalized_direction.dot(camera_right) <= 0.0 or left.normalized_direction.dot(camera_right) >= 0.0:
+			main.free()
+			return false
+		if right.normalized_direction.dot(forward) <= 0.0:
+			main.free()
+			return false
+		var level: Dictionary = main.launch_solution(player_index, 0, Vector2(0, 80))
+		var upward: Dictionary = main.launch_solution(player_index, 0, Vector2(0, -80))
+		if upward.normalized_direction.y <= level.normalized_direction.y:
+			main.free()
+			return false
+	var impulses: Array[float] = []
+	for length in [40.0, 120.0, 240.0]:
+		impulses.append(main.launch_solution(0, 0, Vector2(length, 0)).impulse_magnitude)
+	main.free()
+	return impulses[0] < impulses[1] and impulses[1] < impulses[2]
 
 func _verify_fixed_scenario() -> bool:
 	var first := FixedScenario.build()

@@ -254,13 +254,15 @@ async function sha256(bytes) { return createHash('sha256').update(bytes).digest(
 async function manifestChecks(manifestPath, baseUrl) {
   assert(manifestPath, 'REQ-014 requires --manifest');
   const localPath = resolve(manifestPath);
-  const approved = JSON.parse(await readFile(localPath, 'utf8'));
+  const approvedBytes = await readFile(localPath);
+  const approved = JSON.parse(approvedBytes.toString('utf8'));
   assert(typeof approved.source_commit === 'string' && approved.source_commit.length > 0, 'manifest source_commit missing');
   assert(approved.assets && typeof approved.assets === 'object' && !Array.isArray(approved.assets), 'manifest assets missing');
   const localRoot = resolve(localPath, '..');
   const liveResponse = await fetch(new URL('build-manifest.json', baseUrl), { cache: 'no-store' });
   assert(liveResponse.ok, `live manifest fetch failed: HTTP ${liveResponse.status}`);
-  const live = await liveResponse.json();
+  const liveBytes = Buffer.from(await liveResponse.arrayBuffer());
+  const live = JSON.parse(liveBytes.toString('utf8'));
   assert(live.source_commit === approved.source_commit, `live source_commit mismatch: ${live.source_commit}`);
   assert(JSON.stringify(live.assets) === JSON.stringify(approved.assets), 'live manifest asset list/hashes differ from approved manifest');
   const comparisons = [];
@@ -275,7 +277,60 @@ async function manifestChecks(manifestPath, baseUrl) {
     assert(expected === localHash, `approved local asset hash mismatch: ${asset}`);
     assert(expected === liveHash, `live asset hash mismatch: ${asset}`);
   }
-  return { source_commit: approved.source_commit, live_source_commit: live.source_commit, comparisons };
+  return {
+    evidence: { source_commit: approved.source_commit, live_source_commit: live.source_commit, comparisons },
+    approvedBytes,
+    liveBytes,
+  };
+}
+
+async function verifyDeploymentWorkflow(approvedBytes, liveBytes) {
+  const api = 'https://api.github.com/repos/seo077/block_siege/actions/workflows/pages.yml/runs';
+  const headers = { Accept: 'application/vnd.github+json', 'User-Agent': 'block-siege-regression-verifier', 'X-GitHub-Api-Version': '2022-11-28' };
+  const successfulRuns = [];
+  for (let page = 1; ; page++) {
+    const response = await fetch(`${api}?branch=master&status=completed&per_page=100&page=${page}`, { headers, cache: 'no-store' });
+    assert(response.ok, `GitHub Actions API fetch failed: HTTP ${response.status}`);
+    const payload = await response.json();
+    assert(Array.isArray(payload.workflow_runs), 'GitHub Actions API returned invalid workflow_runs');
+    successfulRuns.push(...payload.workflow_runs.filter(run => run.head_branch === 'master' && run.status === 'completed' && run.conclusion === 'success'));
+    if (payload.workflow_runs.length < 100) break;
+  }
+  assert(successfulRuns.length > 0, 'no completed successful pages.yml run found for master');
+  const mismatches = [];
+  for (const run of successfulRuns) {
+    assert(typeof run.head_sha === 'string' && /^[0-9a-f]{40}$/.test(run.head_sha), `workflow run ${run.id} has invalid head_sha`);
+    const rawUrl = `https://raw.githubusercontent.com/seo077/block_siege/${run.head_sha}/build/web/build-manifest.json`;
+    const response = await fetch(rawUrl, { cache: 'no-store' });
+    if (!response.ok) {
+      mismatches.push({ workflow_id: run.workflow_id, run_id: run.id, head_sha: run.head_sha, raw_manifest_http_status: response.status });
+      continue;
+    }
+    const rawBytes = Buffer.from(await response.arrayBuffer());
+    const approvedMatch = rawBytes.equals(approvedBytes);
+    const liveMatch = rawBytes.equals(liveBytes);
+    if (!approvedMatch || !liveMatch) {
+      mismatches.push({ workflow_id: run.workflow_id, run_id: run.id, head_sha: run.head_sha, approved_match: approvedMatch, live_match: liveMatch });
+      continue;
+    }
+    const manifestSha256 = await sha256(rawBytes);
+    return {
+      workflow_id: run.workflow_id,
+      run_id: run.id,
+      head_sha: run.head_sha,
+      status: run.status,
+      conclusion: run.conclusion,
+      html_url: run.html_url,
+      comparison_binding: {
+        raw_manifest_url: rawUrl,
+        approved_manifest_sha256: await sha256(approvedBytes),
+        live_manifest_sha256: await sha256(liveBytes),
+        workflow_manifest_sha256: manifestSha256,
+        exact_byte_match: true,
+      },
+    };
+  }
+  throw new Error(`no completed successful pages.yml master run has a raw manifest exactly matching approved and live manifests: ${JSON.stringify(mismatches)}`);
 }
 
 async function main() {
@@ -284,7 +339,7 @@ async function main() {
   const server = options.serve ? await serve(options.serve, options['base-url']) : null;
   const chrome = await connectChrome();
   console.log('CDP connected');
-  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], workflow_result: options['workflow-result'] || (options.serve ? 'local-not-applicable' : 'declared-success') };
+  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], workflow_result: options.serve ? 'local-not-applicable' : null };
   try {
     console.log('CASE hud');
     const initial = await freshPage(chrome.cdp, options['base-url']);
@@ -307,7 +362,11 @@ async function main() {
     assert(Math.sign(by['player-1'].normalized_direction[2]) === -Math.sign(by['player-2'].normalized_direction[2]), 'camera-relative lateral semantics differ');
     for (const c of cases.filter(c => c.shot_count)) { assert(c.shot_id >= 0 && c.initial_velocity.length === 3 && c.impulse_magnitude > 0 && c.normalized_direction.length === 3, `${c.name}: incomplete launch telemetry`); }
     if (result.requirements.includes('REQ-017')) result.turn_lifecycle = await turnLifecycleCase(chrome.cdp, options['base-url'], evidence);
-    if (result.requirements.includes('REQ-014')) result.manifest = await manifestChecks(options.manifest, options['base-url']);
+    if (result.requirements.includes('REQ-014')) {
+      const checkedManifest = await manifestChecks(options.manifest, options['base-url']);
+      result.manifest = checkedManifest.evidence;
+      if (!options.serve) result.workflow_result = await verifyDeploymentWorkflow(checkedManifest.approvedBytes, checkedManifest.liveBytes);
+    }
     result.verdict = 'PASS';
   } catch (error) { result.errors.push(error.stack || String(error)); process.exitCode = 1; }
   finally {

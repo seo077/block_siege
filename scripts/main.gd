@@ -3,6 +3,7 @@ extends Node3D
 const SiegeBlock = preload("res://scripts/siege_block.gd")
 const MatchState = preload("res://scripts/core/match_state.gd")
 const ResolutionState = preload("res://scripts/core/resolution_state.gd")
+const HUD_FONT: Font = preload("res://assets/fonts/NotoSansKR-Regular.ttf")
 const FIELD_SIZE := Vector2(60.0, 30.0)
 const ZONE_SIZE := Vector2(10.0, 10.0)
 const MAX_ROUNDS := 20
@@ -59,6 +60,14 @@ var resolution_state: ResolutionState
 var resolution_error: StringName = &""
 var resolution_retry_available := false
 var interaction_enabled := true
+var web_pointer_events: Array = []
+var web_shot_count := 0
+var web_last_shot_id := -1
+var web_initial_velocity := Vector3.ZERO
+var web_impulse_magnitude := 0.0
+var web_normalized_direction := Vector3.ZERO
+var web_snapshot_callback: JavaScriptObject
+var web_reset_callback: JavaScriptObject
 
 func _ready() -> void:
 	create_environment()
@@ -70,6 +79,28 @@ func _ready() -> void:
 	capture_all_baselines()
 	_sync_scene_mirrors()
 	update_ui("플레이어 1의 턴")
+	install_web_test_bridge()
+
+func install_web_test_bridge() -> void:
+	if not OS.has_feature("web"):
+		return
+	web_snapshot_callback = JavaScriptBridge.create_callback(_web_snapshot_json)
+	web_reset_callback = JavaScriptBridge.create_callback(_web_reset)
+	var window := JavaScriptBridge.get_interface("window")
+	window.__block_siege_snapshot_callback = web_snapshot_callback
+	window.__block_siege_reset_callback = web_reset_callback
+	JavaScriptBridge.eval("""
+		globalThis.__BLOCK_SIEGE_TEST__ = Object.freeze({
+			snapshot: () => { globalThis.__block_siege_snapshot_callback(); return globalThis.__block_siege_snapshot_value; },
+			reset: () => { globalThis.__block_siege_reset_callback(); return true; }
+		});
+	""", true)
+
+func _web_snapshot_json(_arguments: Array) -> void:
+	JavaScriptBridge.eval("globalThis.__block_siege_snapshot_value = %s;" % JSON.stringify(web_test_snapshot()), true)
+
+func _web_reset(_arguments: Array) -> void:
+	get_tree().reload_current_scene()
 
 func create_environment() -> void:
 	var world_environment := WorldEnvironment.new()
@@ -291,9 +322,16 @@ func create_ui() -> void:
 	retry_button.size = Vector2(92, 36)
 	retry_button.pressed.connect(on_retry_pressed)
 	layer.add_child(retry_button)
+	for control in [status_label, hint_label, debug_label, adjudication_label, block_total_label, timeout_error_label, retry_button]:
+		control.add_theme_font_override("font", HUD_FONT)
 	update_ui()
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventMouse:
+		var kind := "move"
+		if event is InputEventMouseButton:
+			kind = "press" if event.pressed else "release"
+		web_pointer_events.append({"type": kind, "x": event.position.x, "y": event.position.y})
 	if not interaction_enabled or current_adjudication_state() != &"ready":
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -443,15 +481,28 @@ func web_test_snapshot() -> Dictionary:
 	return {
 		"hud_strings": hud_strings,
 		"approved_korean_strings": APPROVED_KOREAN_STRINGS,
-		"pointer_events": [],
-		"shot_id": match_state.active_shot_block_id if match_state != null else -1,
-		"shot_count": 1 if match_state != null and match_state.active_shot_block_id >= 0 else 0,
-		"initial_velocity": [],
-		"impulse_magnitude": 0.0,
-		"normalized_direction": [],
+		"pointer_events": web_pointer_events.duplicate(true),
+		"shot_id": web_last_shot_id,
+		"shot_count": web_shot_count,
+		"initial_velocity": [web_initial_velocity.x, web_initial_velocity.y, web_initial_velocity.z],
+		"impulse_magnitude": web_impulse_magnitude,
+		"normalized_direction": [web_normalized_direction.x, web_normalized_direction.y, web_normalized_direction.z],
 		"active_player": active_player,
 		"adjudication_state": String(current_adjudication_state()),
+		"missing_glyph_codepoints": web_missing_glyph_codepoints(),
 	}
+
+func web_missing_glyph_codepoints() -> Array[int]:
+	var missing: Array[int] = []
+	for text in APPROVED_KOREAN_STRINGS:
+		for character in text:
+			var codepoint := character.unicode_at(0)
+			if codepoint < 32:
+				continue
+			if not HUD_FONT.has_char(codepoint) and not missing.has(codepoint):
+				missing.append(codepoint)
+	missing.sort()
+	return missing
 
 
 func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
@@ -491,6 +542,11 @@ func fire_weapon(player_id: int, weapon_id: int, drag: Vector2) -> bool:
 	var projectile := spawn_projectile(result.block_id, origin + Vector3(forward * 0.8, 0.55, 0), solution.impulse)
 	if projectile == null:
 		return false
+	web_shot_count += 1
+	web_last_shot_id = result.block_id
+	web_initial_velocity = solution.impulse
+	web_impulse_magnitude = solution.impulse_magnitude
+	web_normalized_direction = solution.normalized_direction
 	weapon_loaded[player_index][weapon_index] = false
 	weapon_fired_this_turn[player_index][weapon_index] = true
 	resolving_shot = true

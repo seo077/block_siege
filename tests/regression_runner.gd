@@ -139,8 +139,14 @@ func _verify_fixed_scenario() -> bool:
 	return scene_valid
 
 func _verify_ui_diagnostics() -> bool:
-	var main := Main.new()
+	var scene := load("res://main.tscn") as PackedScene
+	if scene == null:
+		report_failure("REQ-010-UI", "play scene", "res://main.tscn could not be loaded")
+		return false
+	var main := scene.instantiate()
 	root.add_child(main)
+	main.call("create_match")
+	main.call("create_ui")
 	var passed := UiDiagnostics.assert_diagnostics(main)
 	main.free()
 	return passed

@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "59725d80"
-next_action: "Checkpoint the approved interlocking documents and run fresh independent verification from 2d6b45c through HEAD"
+next_action: "E1 complete; select and spec the next roadmap slice before further code changes"
 blocked_on: ""
 open_assumptions: []
-last_verified_commit: "2d6b45c"
-head_commit: "98f8c8e"
+last_verified_commit: "af88318"
+head_commit: "af88318"
 updated_at: "2026-08-24"
 ---
 
@@ -17,8 +17,8 @@ updated_at: "2026-08-24"
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: G0 approved; T-001 through T-011 implemented; individual REQ checks, full acceptance matrix twice, and scene smoke pass with Godot 4.7.2.
-- Now: REQ-011 automated play-scene UI verification is implemented and passes; verifier policy must be updated from unavailable `godot4` to the approved repository-local executable before fresh independent verification.
+- Done: G0 approved; T-001 through T-013 implemented; independent verification passed all 11 requirements with 0 failures and 0 inconclusive results.
+- Now: E1 is complete; the next code change should begin only after selecting and approving the next roadmap slice.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -71,3 +71,4 @@ updated_at: "2026-08-24"
 - 2026-08-24: Human re-approved G0 for spec 59725d80 and criteria 99db21c2; code edits are unlocked for the REQ-011 delta.
 - 2026-08-24: Completed T-013 at 98f8c8e; actual play-scene initial/resolving/timeout diagnostics, independent scene/ledger totals, and same-shot Retry refresh passed, as did REQ-010 repeated twice.
 - 2026-08-24: Human directed uninterrupted E1 completion, approving replacement of the stale verifier command with the exact repository-local PowerShell Godot runner.
+- 2026-08-24: Fresh independent verification of 2d6b45c..af88318 returned PASS for all 11 requirements with 0 failures and 0 inconclusive results; E1 is complete.

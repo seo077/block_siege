@@ -4,12 +4,12 @@ feature: 001-core-combat-economy
 phase: SPEC
 size: feature
 gates_passed: [G0]
-spec_sha256: "9cb1ff03"
-next_action: "Obtain human approval to add the project-local Godot regression command to verify.commands, then re-run independent verification and observe the UI"
-blocked_on: "Independent verifier execution policy has no allowed commands; REQ-010 also requires human observation in an actual Godot window"
+spec_sha256: "59725d80"
+next_action: "Checkpoint the approved interlocking documents and run fresh independent verification from 2d6b45c through HEAD"
+blocked_on: ""
 open_assumptions: []
 last_verified_commit: "2d6b45c"
-head_commit: "1247313"
+head_commit: "98f8c8e"
 updated_at: "2026-08-24"
 ---
 
@@ -18,7 +18,7 @@ updated_at: "2026-08-24"
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
 - Done: G0 approved; T-001 through T-011 implemented; individual REQ checks, full acceptance matrix twice, and scene smoke pass with Godot 4.7.2.
-- Now: Await approval for a narrowly scoped verifier command and human UI observation; automated local checks already pass.
+- Now: REQ-011 automated play-scene UI verification is implemented and passes; verifier policy must be updated from unavailable `godot4` to the approved repository-local executable before fresh independent verification.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -57,3 +57,17 @@ updated_at: "2026-08-24"
 - 2026-08-24: Independent verification returned 8 PASS, REQ-009 FAIL for premature resolving-state callbacks, and REQ-010 INCONCLUSIVE for unavailable execution/manual observation; added T-012.
 - 2026-08-24: Completed T-012 at 1822ea7; REQ-009 and the complete acceptance matrix twice passed, with premature callbacks now inert until fixed-tick settlement authorization.
 - 2026-08-24: Fresh independent verification returned all requirements inconclusive because policy.verify.commands is empty; REQ-010 additionally requires human observation in an actual Godot window.
+- 2026-08-24: Human approved the project-local Godot headless requirement runner for verify.commands; independent verification is ready to rerun at c31988b.
+- 2026-08-24: Independent verification returned 0 PASS, 0 FAIL, and 10 INCONCLUSIVE because `godot4` was not on PATH; the repository-local executable is documented under `.tools`, so changing the verification method now requires visible amendment and re-approval.
+- 2026-08-24: Human authorized amending REQ-010 to use the repository-local Godot 4 executable; prior G0 approval and acceptance criteria are invalidated pending regeneration and review.
+- 2026-08-24: Design brief exposed the REQ-010 executable clause as a duplicate parsed requirement; folded it into the existing REQ-010 and invalidated the first regenerated criteria.
+- 2026-08-24: Regenerated 10 acceptance criteria, then independent spec review returned NOT YET because REQ-010 lacks a reproducible method and PASS/FAIL conditions for the play-screen diagnostic UI.
+- 2026-08-24: Human accepted the recommended REQ-010 amendment requiring the local regression entrypoint to instantiate the play scene and assert diagnostic state, independent totals, timeout error, and Retry behavior.
+- 2026-08-24: Regenerated criteria and reran independent review; verdict remained NOT YET because REQ-010's criterion can pass without verifying initial/resolving/timeout UI states and Retry same-shot resumption plus UI refresh.
+- 2026-08-24: Human approved splitting the complete UI regression contract into REQ-011 so its three states, independent totals, Retry action, same-shot resumption, and UI refresh receive a separate verdict.
+- 2026-08-24: Regenerated 11 runnable criteria, but independent review returned NOT YET because every generated Method misspelled the Windows executable as a drive-root path instead of repository-relative `.\\.tools`.
+- 2026-08-24: Human approved making the exact repository-relative PowerShell executable spelling normative and explicitly excluding the drive-root variant.
+- 2026-08-24: Regenerated 11 criteria with valid repository-relative commands; independent critic reviewed spec 59725d80 and criteria 99db21c2 and returned READY; G0 re-approval awaits the human.
+- 2026-08-24: Human re-approved G0 for spec 59725d80 and criteria 99db21c2; code edits are unlocked for the REQ-011 delta.
+- 2026-08-24: Completed T-013 at 98f8c8e; actual play-scene initial/resolving/timeout diagnostics, independent scene/ledger totals, and same-shot Retry refresh passed, as did REQ-010 repeated twice.
+- 2026-08-24: Human directed uninterrupted E1 completion, approving replacement of the stale verifier command with the exact repository-local PowerShell Godot runner.

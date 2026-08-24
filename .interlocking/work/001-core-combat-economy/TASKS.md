@@ -249,3 +249,20 @@
 
 - 2026-08-24: Independent acceptance verification found REQ-009 vulnerable to premature resolving-state callbacks; T-012 added as corrective work. REQ-010 remained inconclusive pending executable and human UI observation.
 - 2026-08-24: T-012 done at `1822ea7`; resolving-state callback spam is inert and settled resolution applies exactly once. REQ-009 and the full matrix repeated twice passed.
+
+## T-013 Verify complete play-scene UI state and Retry behavior
+
+- state:    todo
+- covers:   REQ-011
+- depends:  T-010, T-012
+- produces: |
+    tests/fixtures/ui_diagnostics.gd
+      static func assert_diagnostics(main: Node) -> bool
+      Asserts initial, resolving, and timeout labels/totals against independent scene and ledger counts, then Retry preserves the shot ID and immediately refreshes the visible state
+    tests/regression_runner.gd
+      REQ-010-UI instantiates the playable `main.tscn` scene for the REQ-011 fixture
+- verify:   .\.tools\godot-4.7.2\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement REQ-010-UI
+
+## Execution log (continued)
+
+- 2026-08-24: T-013 done at `98f8c8e`; the actual `main.tscn` scene passed initial/resolving/timeout state and independent 200-count checks, and Retry preserved shot ID 10 while immediately refreshing the HUD. REQ-010-UI and REQ-010 repeated twice passed.

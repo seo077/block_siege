@@ -19,7 +19,11 @@
   "override": { "max_minutes": 20, "max_edits": 25 },
 
   "_verify": "Commands the verifier subagent is allowed to run. It has no other execution rights.",
-  "verify": { "commands": [] },
+  "verify": {
+    "commands": [
+      ".\\.tools\\godot-4.7.2\\Godot_v4.7.2-stable_win64_console.exe --headless --path . --script res://tests/regression_runner.gd -- --requirement *"
+    ]
+  },
 
   "_verifiers": "Which agent judges which REQ. A REQ tagged [circuit] routes to the circuit verifier; untagged REQs go to default.",
   "verifiers": {

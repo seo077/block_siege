@@ -4,6 +4,7 @@ import { createReadStream, existsSync } from 'node:fs';
 import { resolve, join, extname, relative, isAbsolute } from 'node:path';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 
 const ORACLE = [
   '플레이어 1의 턴', '[1] 투석기  [2] 전차  |  마우스 드래그: 발사\n전차 선택 중 WASD: 이동  |  [Enter]: 턴 종료',
@@ -177,13 +178,42 @@ async function utf8Checks(serveDir, runtime) {
   }
 }
 
+async function sha256(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
+
+async function manifestChecks(manifestPath, baseUrl) {
+  assert(manifestPath, 'REQ-014 requires --manifest');
+  const localPath = resolve(manifestPath);
+  const approved = JSON.parse(await readFile(localPath, 'utf8'));
+  assert(typeof approved.source_commit === 'string' && approved.source_commit.length > 0, 'manifest source_commit missing');
+  assert(approved.assets && typeof approved.assets === 'object' && !Array.isArray(approved.assets), 'manifest assets missing');
+  const localRoot = resolve(localPath, '..');
+  const liveResponse = await fetch(new URL('build-manifest.json', baseUrl), { cache: 'no-store' });
+  assert(liveResponse.ok, `live manifest fetch failed: HTTP ${liveResponse.status}`);
+  const live = await liveResponse.json();
+  assert(live.source_commit === approved.source_commit, `live source_commit mismatch: ${live.source_commit}`);
+  assert(JSON.stringify(live.assets) === JSON.stringify(approved.assets), 'live manifest asset list/hashes differ from approved manifest');
+  const comparisons = [];
+  for (const [asset, expected] of Object.entries(approved.assets)) {
+    assert(!asset.startsWith('/') && !asset.includes('..') && asset !== 'build-manifest.json', `unsafe manifest asset: ${asset}`);
+    assert(/^[0-9a-f]{64}$/.test(expected), `invalid SHA-256 for ${asset}`);
+    const localHash = await sha256(await readFile(resolve(localRoot, asset)));
+    const response = await fetch(new URL(asset, baseUrl), { cache: 'no-store' });
+    assert(response.ok, `live asset fetch failed for ${asset}: HTTP ${response.status}`);
+    const liveHash = await sha256(Buffer.from(await response.arrayBuffer()));
+    comparisons.push({ path: asset, expected_sha256: expected, local_sha256: localHash, live_sha256: liveHash, match: expected === localHash && expected === liveHash });
+    assert(expected === localHash, `approved local asset hash mismatch: ${asset}`);
+    assert(expected === liveHash, `live asset hash mismatch: ${asset}`);
+  }
+  return { source_commit: approved.source_commit, live_source_commit: live.source_commit, comparisons };
+}
+
 async function main() {
   const options = args(process.argv), evidence = resolve(options.evidence);
   await mkdir(evidence, { recursive: true });
   const server = options.serve ? await serve(options.serve, options['base-url']) : null;
   const chrome = await connectChrome();
   console.log('CDP connected');
-  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [] };
+  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], workflow_result: options['workflow-result'] || (options.serve ? 'local-not-applicable' : 'declared-success') };
   try {
     console.log('CASE hud');
     const initial = await freshPage(chrome.cdp, options['base-url']);
@@ -205,6 +235,7 @@ async function main() {
     assert(by['player-2'].active_player === 1 && by['player-2'].normalized_direction[0] < 0, 'player 2 not opponent-facing');
     assert(Math.sign(by['player-1'].normalized_direction[2]) === -Math.sign(by['player-2'].normalized_direction[2]), 'camera-relative lateral semantics differ');
     for (const c of cases.filter(c => c.shot_count)) { assert(c.shot_id >= 0 && c.initial_velocity.length === 3 && c.impulse_magnitude > 0 && c.normalized_direction.length === 3, `${c.name}: incomplete launch telemetry`); }
+    if (result.requirements.includes('REQ-014')) result.manifest = await manifestChecks(options.manifest, options['base-url']);
     result.verdict = 'PASS';
   } catch (error) { result.errors.push(error.stack || String(error)); process.exitCode = 1; }
   finally {

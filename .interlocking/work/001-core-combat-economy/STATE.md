@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "a5372bcc"
-next_action: "Run fresh independent acceptance verification for REQ-001 through REQ-014"
+next_action: "Independently reverify REQ-014 after T-017"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "af88318"
-head_commit: "cb87a97"
+head_commit: "622afa5"
 updated_at: "2026-08-25"
 ---
 
@@ -84,3 +84,5 @@ updated_at: "2026-08-25"
 - 2026-08-24: Completed T-014 at 8767c21; corrected Korean runtime strings and measurable drag launch semantics passed REQ-012/013 plus existing firing/UI regressions.
 - 2026-08-25: Completed T-015 at e16602f; actual Chrome canvas tests passed 11 cases, bundled Noto Sans KR rendered correctly in inspected PNG, and missing-glyph telemetry was empty.
 - 2026-08-25: Completed T-016 at cb87a97; pushed the manifest-bearing Web export, Pages workflow 32743643892 succeeded, all 10 deployed hashes matched, and live Chrome evidence passed REQ-012 through REQ-014 with Korean rendering visually confirmed.
+- 2026-08-25: Independent verification returned 13 PASS and REQ-014 FAIL because the deployed bridge missed the harness's 6.4-second startup window; appended corrective T-017.
+- 2026-08-25: Completed T-017 at 622afa5; bounded 30-second readiness polling with diagnostic timeout preserved nonzero failure and the live 11-case REQ-014 command passed.

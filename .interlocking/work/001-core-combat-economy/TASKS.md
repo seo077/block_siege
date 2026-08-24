@@ -313,3 +313,19 @@
 - 2026-08-24: T-014 done at `8767c21`; UTF-8 Korean oracle/runtime strings and deterministic 24px drag boundary, camera-relative direction, elevation, and monotonic impulse passed REQ-012, REQ-013, REQ-003, and REQ-010-UI.
 - 2026-08-25: T-015 done at `e16602f`; bundled Noto Sans KR renders without tofu, and the dependency-free CDP harness passed 11 isolated real-canvas cases with missing-glyph, HUD, pointer, launch, JSON, and PNG evidence.
 - 2026-08-25: T-016 done at `cb87a97`; GitHub Pages workflow run 32743643892 succeeded, the deployed manifest matched all 10 approved asset hashes, and 11 live Chrome canvas cases passed REQ-012 through REQ-014 with visually inspected Korean HUD evidence.
+- 2026-08-25: Independent verification of `af88318..fb2399b` returned 13 PASS and REQ-014 FAIL because one deployed run exhausted the 6.4-second bridge startup window before running any browser case; added T-017 without rewriting T-016.
+
+## T-017 Make deployed browser startup resilient to normal WebAssembly load variance
+
+- state:    todo
+- covers:   REQ-014
+- depends:  T-016
+- produces: |
+    tests/web/run_browser_regression.mjs
+      async function freshPage(cdp, baseUrl)
+      Waits a bounded, diagnostic-rich interval suitable for cold deployed WebAssembly startup while preserving nonzero failure for a genuinely absent canvas/bridge
+- verify:   node tests/web/run_browser_regression.mjs --base-url https://seo077.github.io/block_siege/ --requirements REQ-012,REQ-013,REQ-014 --manifest build/web/build-manifest.json --evidence build/web-evidence/deployed
+
+## Execution log (continued)
+
+- 2026-08-25: T-017 done at `622afa5`; bounded readiness polling increased to 30 seconds with URL/document/canvas/bridge diagnostics, absent bridges still fail nonzero, and the exact live REQ-014 command passed all 11 cases.

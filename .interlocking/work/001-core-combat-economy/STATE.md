@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "f54a53a5"
-next_action: "Run fresh independent acceptance verification for REQ-001 through REQ-017"
+next_action: "Run fresh independent acceptance verification after T-021/T-022"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
-head_commit: "9f27abc"
+head_commit: "c93e453"
 updated_at: "2026-08-25"
 ---
 
@@ -92,3 +92,6 @@ updated_at: "2026-08-25"
 - 2026-08-25: Completed T-018 at 060df7f; REQ-015/016 passed both-player range, opposing-zone reach, bounded field exit, normal resolution, input lock, and ready HUD checks.
 - 2026-08-25: Completed T-019 at 86ee66e; after diagnosing projectile-only residual spin, physical damping/friction produced repeated real-browser reach, normal resolution, and Enter turn-transition passes without blanket forced settling.
 - 2026-08-25: Completed T-020 at 9f27abc; Pages workflow 32755631110 succeeded and live browser evidence confirmed opposing-zone reach, normal resolution without timeout, and Enter transition to player 2 in round 1.
+- 2026-08-25: Independent verification returned 15 PASS, REQ-017 FAIL from a repeated local timeout, and REQ-014 INCONCLUSIVE from unavailable verifier network; appended T-021 after exhausting T-019 retries.
+- 2026-08-25: Completed T-021 at b17d402; deterministic physical damping/impulse parameters preserved x=20 reach and passed five consecutive local lifecycle E2E runs without forced settling.
+- 2026-08-25: Completed T-022 at c93e453; Pages workflow 32759884762 succeeded and the b17d402 live build passed the full deployed reach/resolution/Enter lifecycle.

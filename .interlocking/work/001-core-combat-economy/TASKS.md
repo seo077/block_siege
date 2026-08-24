@@ -374,3 +374,31 @@
 - 2026-08-25: T-018 done at `060df7f`; both-player 40/120/240 range progression, full-power opposing-zone reach, all field boundary stops, exactly-once normal resolution, resolving Enter lock, and ready HUD guidance passed REQ-015/016.
 - 2026-08-25: T-019 done at `86ee66e`; measured projectile-only spin was corrected with physical angular damping/friction, and repeated real Chrome runs passed opposing-zone reach, no timeout, resolving Enter lock, ready transition, and exactly-once player-2 turn change.
 - 2026-08-25: T-020 done at `9f27abc`; Pages workflow 32755631110 succeeded, live manifest source was 86ee66e, and deployed Chrome evidence passed 11 legacy cases plus 182-sample reach/resolution/Enter lifecycle with a visually confirmed player-2 ready HUD.
+- 2026-08-25: Independent verification of `a6dea47..345a931` returned 15 PASS, REQ-017 FAIL from another local physical timeout, and REQ-014 INCONCLUSIVE from verifier network failure; T-019 retry allowance was exhausted, so added T-021.
+
+## T-021 Eliminate residual projectile timeout variance while preserving reach
+
+- state:    todo
+- covers:   REQ-015, REQ-016, REQ-017
+- depends:  T-020
+- produces: |
+    scripts/main.gd
+      Deterministic projectile flight/settling parameters that preserve 40<120<240 range and x=20 reach but satisfy 0.12 BL/s and 0.2 rad/s naturally before 8.0 seconds
+    tests/web/run_browser_regression.mjs
+      Lifecycle evidence includes terminal projectile motion and repeated-run stability without weakening timeout assertions
+- verify:   node tests/web/run_browser_regression.mjs --base-url http://127.0.0.1:8060 --serve build/web --requirements REQ-015,REQ-016,REQ-017 --evidence build/web-evidence/local-e2e
+
+## T-022 Redeploy and independently verify the stable projectile build
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-021
+- produces: |
+    build/web/**
+      Fresh T-021 Godot Web export and source-bound SHA-256 manifest
+- verify:   node tests/web/run_browser_regression.mjs --base-url https://seo077.github.io/block_siege/ --requirements REQ-015,REQ-016,REQ-017 --manifest build/web/build-manifest.json --evidence build/web-evidence/deployed-e2e
+
+## Execution log (continued)
+
+- 2026-08-25: T-021 done at `b17d402`; paired 32.0 max catapult impulse with 0.2 linear and 40 angular projectile damping, preserving reach while passing the exact local lifecycle E2E five consecutive times and all relevant headless regressions.
+- 2026-08-25: T-022 done at `c93e453`; Pages workflow 32759884762 succeeded, live manifest bound b17d402, and the deployed lifecycle E2E passed opposing-zone reach, natural resolution, and player-2 turn transition.

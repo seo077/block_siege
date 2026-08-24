@@ -508,6 +508,8 @@ func _legacy_fire_selected(drag: Vector2) -> void:
 func finish_shot_resolution() -> void:
 	if match_state == null or resolution_state == null or resolution_state.status != &"resolved":
 		return
+	if not match_state.authorize_settled_resolution(resolution_state):
+		return
 	var poses: Dictionary = collect_resolution_poses()
 	var attacker_id: int = match_state.active_player_id
 	var model_result := match_state.resolve_shot_once(poses)

@@ -33,6 +33,7 @@ var original_block_ids: Array[int] = []
 var timeout_snapshot = null
 var resolution_timeout_error := false
 var _resolution_apply_count := 0
+var _resolution_settled_authorized := false
 
 static func create_fixed_scenario(player_ids: Array[int] = [1, 2]) -> MatchState:
 	var scenario_players: Array[PlayerState] = []
@@ -181,6 +182,7 @@ func request_fire(player_id: int, weapon_id: int, drag: Vector2) -> Dictionary:
 	weapon.fired_this_turn = true
 	player.turn_actions.shots_fired += 1
 	resolving_shot = true
+	_resolution_settled_authorized = false
 	active_shot_block_id = block_id
 	active_shot_attacker_id = player_id
 	active_shot_weapon_id = weapon_id
@@ -190,11 +192,22 @@ func request_fire(player_id: int, weapon_id: int, drag: Vector2) -> Dictionary:
 func resolve_shot_once(poses: Dictionary) -> Dictionary:
 	if resolution_timeout_error:
 		return {"accepted": false, "applied": false, "reason": "resolution_timeout", "affected": []}
+	if not _resolution_settled_authorized:
+		return {"accepted": false, "applied": false, "reason": "resolution_not_settled", "affected": []}
 	var transaction = load("res://scripts/core/resolution_transaction.gd").build(self, poses)
 	var result: Dictionary = transaction.apply(self)
 	if result.get("applied", false):
 		_resolution_apply_count += 1
+		_resolution_settled_authorized = false
 	return result
+
+func authorize_settled_resolution(resolution) -> bool:
+	if resolution == null or resolution.status != &"resolved" or resolution.shot_block_id != active_shot_block_id:
+		return false
+	if not resolving_shot or resolution_timeout_error or active_shot_block_id < 0:
+		return false
+	_resolution_settled_authorized = true
+	return true
 
 func enter_timeout(poses: Dictionary, motions: Dictionary) -> void:
 	if timeout_snapshot == null:
@@ -202,6 +215,7 @@ func enter_timeout(poses: Dictionary, motions: Dictionary) -> void:
 	resolution_timeout_error = true
 	combat_input_locked = true
 	resolving_shot = true
+	_resolution_settled_authorized = false
 
 func retry_timed_out_shot() -> Dictionary:
 	if not resolution_timeout_error or timeout_snapshot == null:
@@ -211,6 +225,7 @@ func retry_timed_out_shot() -> Dictionary:
 	resolution_timeout_error = false
 	combat_input_locked = false
 	resolving_shot = true
+	_resolution_settled_authorized = false
 	return restored
 
 func resolution_apply_count() -> int:

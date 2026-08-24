@@ -400,6 +400,12 @@ func _verify_timeout_retry() -> bool:
 		if not state.request_fire(attacker.id, attacker.weapons[0].id, Vector2.ONE).accepted: return false
 		var ownership := state.ownership_snapshot()
 		var gameplay_before := _transaction_snapshot(state)
+		var early_resolution := ResolutionState.begin(shot_id, [])
+		if state.authorize_settled_resolution(early_resolution): return false
+		for spam in 4:
+			var early_callback = state.resolve_shot_once(_poses_for(state, []))
+			if early_callback.applied or early_callback.reason != "resolution_not_settled": return false
+		if gameplay_before != _transaction_snapshot(state) or state.ownership_snapshot() != ownership or state.resolution_apply_count() != 0: return false
 		var poses := {shot_id: Transform3D(Basis.IDENTITY, Vector3(1, 2, 3))}
 		var motions := {shot_id: {"linear_velocity": Vector3(4, 5, 6), "angular_velocity": Vector3(1, 2, 3)}}
 		state.enter_timeout(poses, motions)
@@ -431,6 +437,11 @@ func _verify_timeout_retry() -> bool:
 				for tick in 80:
 					if resolution.advance_fixed_tick(0.1, moving) != (&"timeout" if tick == 79 else &"resolving"): return false
 				if not is_equal_approx(resolution.elapsed, 8.0): return false
+		# Fixed-tick stability is the only path that authorizes the callback.
+		var quiet := {shot_id: {"linear": 0.0, "angular": 0.0}, state.players[1].fortress_block_ids[0]: {"linear": 0.0, "angular": 0.0}}
+		for tick in 15:
+			if resolution.advance_fixed_tick(0.1, quiet) != (&"resolved" if tick == 14 else &"resolving"): return false
+		if not state.authorize_settled_resolution(resolution): return false
 		var resolved = state.resolve_shot_once(_poses_for(state, []))
 		if not resolved.applied or state.resolution_apply_count() != 1: return false
 		var duplicate = state.resolve_shot_once(_poses_for(state, []))

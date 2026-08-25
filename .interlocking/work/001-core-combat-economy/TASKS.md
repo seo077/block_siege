@@ -503,3 +503,46 @@
 - 2026-08-25: T-028 done at `f4dcb3c`; ephemeral CDP ports/profiles, PID/exit/stderr ownership evidence, independent server/navigation/bootstrap diagnostics, and exactly one cleaned pre-game retry made the exact four-command sequence pass twice (8/8), leaving no harness-owned Chrome, profile, or port listener.
 
 - 2026-08-25: Post-T-028 independent verification reported 15 PASS, 0 FAIL, and REQ-014/017 INCONCLUSIVE because the verifier environment denied deployed network access (`ERR_NETWORK_ACCESS_DENIED`); the verifier identity hook also refused its one-use VERIFY.md write. No implementation failure was found; continuation requires a verification-only SPEC amendment and renewed G0 approval rather than another identical verifier run.
+
+## T-029 Bind local verification to approved SPEC and complete static/baseline coverage
+
+- state:    todo
+- covers:   REQ-002, REQ-005, REQ-012, REQ-013
+- depends:  T-028
+- produces: |
+    tests/web/run_browser_regression.mjs
+      function extractApprovedKoreanOracle(specPath)
+      Accepts `--oracle-spec`, derives the normative REQ-012 oracle from that file instead of a harness constant, and implements the coordinated runtime+harness corruption negative self-test
+    tests/verification/core_dependency_check.mjs
+      Traverses `scripts/core/**` and project-local state helper/autoload dependencies and rejects scene-node or fixed-two-player core coupling
+    tests/regression_runner.gd
+      REQ-005 fixtures prove each structure block captures and retains its own stable baseline before displacement/rotation adjudication
+- verify:   Run the exact REQ-002, REQ-005, and amended local REQ-012/013 criteria commands, including the coordinated-oracle negative self-test
+
+## T-030 Add authenticated offline deployment-evidence verification
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-029
+- produces: |
+    tests/web/verify_preserved_deployment.mjs
+      Verifies an artifact-attestation Sigstore bundle using a verifier-owned custom trusted root outside the repository; enforces repository/workflow/ref identity, source-commit ancestry, attested-head manifest bytes, payload digest, evidence completeness, local/live asset hashes, and lifecycle consistency
+    tests/web/fixtures/attestation-negative/**
+      Negative fixtures for signature, trust-root origin/hash, identity, ancestry, manifest, digest, screenshot, evidence, and lifecycle tampering
+    tests/web/run_browser_regression.mjs
+      Emits a deterministic evidence payload suitable for GitHub artifact attestation and offline verification
+- verify:   Run the REQ-014 and REQ-017 offline criteria commands and every negative-evidence self-test with a verifier-owned trusted root fixture
+
+## T-031 Attest, deploy, and independently verify the final E1 evidence bundle
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-030
+- produces: |
+    .github/workflows/pages.yml
+      Pages workflow creates and publishes a GitHub artifact attestation for the exact deployment-evidence payload with repository/workflow/ref/head provenance
+    build/web-evidence/deployed/**
+      Source-bound deployed REQ-014 JSON/PNG evidence, attestation bundle, and attested payload
+    build/web-evidence/deployed-e2e/**
+      Source-bound deployed lifecycle JSON/PNG evidence bound into the attested payload
+- verify:   Pages deployment succeeds, the live REQ-014/017 commands pass, offline attestation verification passes with independently supplied trusted roots, and fresh independent acceptance verification returns 17 PASS

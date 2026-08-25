@@ -4,12 +4,12 @@ feature: 001-core-combat-economy
 phase: SPEC
 size: feature
 gates_passed: [G0]
-spec_sha256: "f54a53a5"
-next_action: "Amend REQ-014/017 verification method for network-restricted independent verification, regenerate criteria, and request G0 re-approval"
-blocked_on: "Human approval of a verification-only SPEC amendment; independent verifier network was denied and its VERIFY.md capability write was refused"
+spec_sha256: "8359aee0"
+next_action: "Implement T-029 approved-SPEC oracle, core dependency-closure, and baseline verification contracts"
+blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
-head_commit: "f4dcb3c"
+head_commit: "8e3c9e5"
 updated_at: "2026-08-25"
 ---
 
@@ -21,6 +21,29 @@ updated_at: "2026-08-25"
 - Now: E1 is reopened because the deployed browser path exposed broken Korean text and unusable drag firing that prior criteria did not cover.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
+
+## Interlocking retrospective
+
+Observed process costs to retain for a later interlocking revision:
+
+- A verification-method-only SPEC amendment invalidates G0, every acceptance criterion, and the independent review, forcing the full criteria → critic → human-approval loop even when runtime behavior is unchanged.
+- The one-use judgement write grant is fragile on Codex: reused subagent identities were rejected, and replacing `REVIEW.md` consumed the grant on deletion before the add. Several packet rebuilds and fresh agents were needed solely to record an already reached verdict.
+- Verifier network denial turned valid live-browser behavior into INCONCLUSIVE. The framework had no predeclared authenticated offline evidence route, so that route had to be designed inside the feature SPEC after implementation.
+- `STATE.md.gates_passed` can remain stale after the signed store closes G0, producing a confusing mirror-versus-authority warning. State synchronization should happen automatically when an approved SPEC hash changes.
+- Independent critics repeatedly surfaced old requirements unrelated to the narrow amendment. This improved rigor but expanded a verification-only change into repeated whole-spec repair cycles; the framework needs an explicit policy for full re-review versus delta review, with the assurance tradeoff visible to the human.
+- The console packet/write workflow depends on exact agent identity but Codex task names do not reliably satisfy the identity hook. Packet grants should bind to an opaque capability token or canonical spawned-agent ID rather than a role-name convention.
+- Large generated browser evidence and packet files remain uncommitted during gate work, which repeatedly triggers dirty-worktree action-required warnings even when those files are expected verification artifacts. The framework should distinguish owned transient evidence from unrelated human changes.
+- E1 was declared complete more than once after internal/headless checks passed, then reopened by real deployed-browser defects (mojibake, ineffective drag, insufficient range, stalled resolution/turn transition). Browser-visible acceptance must be specified before the first G0 for Web-delivered features.
+- The user experienced the assurance loop as too slow. Future use should prefer smaller feature slices, reserve the full interlocking path for high-risk behavior, and offer a clearly recorded fast path for trivial or verification-contract-only amendments without silently weakening evidence.
+
+Candidate interlocking improvements:
+
+1. Add a `verification-only amendment` gate that preserves unchanged requirements and criteria, regenerates/reviews only affected pairs, and still requires explicit human approval.
+2. Make judgement writes atomic replace operations with a grant consumed only after the target write succeeds.
+3. Add first-class authenticated offline verification artifacts and verifier-owned trust-root support for network-restricted agents.
+4. Automatically reconcile `STATE.md` gate mirrors, HEAD anchors, expected generated artifacts, and the signed external store.
+5. Persist structured timestamps for `il approve`, criteria generation, critic verdicts, implementation commits, deployments, and verification verdicts instead of date-only prose.
+6. Add a Web-feature intake check requiring deployed-browser smoke, text rendering, pointer/keyboard semantics, lifecycle completion, and source-to-deployment provenance before G0.
 
 ## History
 - 2026-08-23: User selected E1 from the proposed epic decomposition.
@@ -105,3 +128,15 @@ updated_at: "2026-08-25"
 - 2026-08-25: Independent verification returned 15 PASS and REQ-014/017 FAIL: the deployed Chrome navigation became chrome-error with no canvas/bridge, and the later local lifecycle had canvas but no bridge after an earlier browser command; appended T-028 instead of rerunning the verifier.
 - 2026-08-25: Completed T-028 at f4dcb3c; ephemeral CDP ownership, startup diagnostics, and one clean pre-game retry passed the exact four-command sequence twice (8/8) with no harness process/profile/server leak; next is fresh independent verification.
 - 2026-08-25: Fresh independent verification reported 15 PASS, 0 FAIL, and REQ-014/017 INCONCLUSIVE because its environment denied deployed network access (`ERR_NETWORK_ACCESS_DENIED`); its one-use VERIFY.md write was also refused by the identity hook, so the prior written 15/17 report remains in VERIFY.md. Implementation and live evidence are preserved; resume with a verification-only SPEC amendment and G0 re-approval, not a blind verifier rerun.
+- 2026-08-25: Human directed E1 completion and asked that `il approve` and independent verification timing/results remain in the durable history; accepted preserving the existing verifier packet/evidence and proceeding with the verification-only REQ-014/017 amendment.
+- 2026-08-25: Amended REQ-014/017 without changing runtime behavior so a policy-network-restricted verifier can combine source-bound deployed evidence with its own same-build local browser execution; prior G0 approval and criteria are invalidated pending regeneration, independent review, and human re-approval.
+- 2026-08-25: Isolated il-criteria regenerated all 17 acceptance criteria for spec 5fbc0581 with 0 unjudgeable requirements; REQ-014/017 require an offline evidence-validation CLI and tamper/mismatch negative self-tests.
+- 2026-08-25: Independent spec critic returned NOT YET because REQ-012 could self-certify coordinated corruption through the harness's hard-coded oracle; amended REQ-012 to extract its oracle directly from the approved SPEC and require a coordinated-corruption negative case, invalidating criteria ebba4c8f and the review.
+- 2026-08-25: Isolated il-criteria regenerated all 17 criteria for spec 165af197 with 0 unjudgeable requirements; the new REQ-012 oracle-input and REQ-014/017 offline-evidence CLI contracts remain implementation deltas after G0.
+- 2026-08-25: Fresh independent critic returned NOT YET on spec 165af197/criteria 7aa7bb4f: offline deployment evidence lacked independent authentication, REQ-002 inspection was bypassable, REQ-012 standard/oracle commands diverged, and REQ-016's standard shot was ambiguous. Amended all four contracts, including offline-verifiable GitHub Actions Sigstore provenance.
+- 2026-08-25: Confirmed from official GitHub documentation that artifact attestation bundles and custom trusted roots support offline verification, then a fresh isolated il-criteria regenerated 17 criteria for spec bdc420e5 with 0 unjudgeable requirements.
+- 2026-08-25: Independent critic found three blockers: workflow head/source commit were treated as equal instead of ancestor/tree lineage, repository-controlled trusted roots were not independent, and REQ-005 criteria omitted per-block stable-baseline capture/storage. Amended REQ-014 lineage and verifier-owned trust-root requirements; criteria must be regenerated for all three.
+- 2026-08-25: Fresh isolated il-criteria regenerated all 17 criteria for spec 8359aee0 with 0 unjudgeable requirements and no human-visible concerns.
+- 2026-08-25: Fresh independent il-spec-critic reviewed spec 8359aee0 and criteria 2829f5ce, returned READY with zero findings/blockers, and recorded REVIEW.md; G0 re-approval now awaits the human.
+- 2026-08-25: Human judged the interlocking loop too slow and requested a durable record for later plugin revision; added the detailed retrospective and six concrete framework improvement candidates above without changing SPEC, criteria, or the pending G0 action.
+- 2026-08-25: Human typed `il approve`; G0 re-approved spec 8359aee0 and criteria 2829f5ce, unlocking code edits for the remaining verification-contract implementation.

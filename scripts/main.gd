@@ -394,6 +394,8 @@ func advance_resolution(delta: float) -> void:
 	if sampled_projectile != null and is_instance_valid(sampled_projectile):
 		var sampled_position := sampled_projectile.global_position if sampled_projectile.is_inside_tree() else sampled_projectile.position
 		web_projectile_samples.append({"time": resolution_state.elapsed, "position": [sampled_position.x, sampled_position.y, sampled_position.z]})
+	damp_contacting_structure_bodies()
+	settle_reached_projectile_on_ground()
 	stop_projectile_outside_field()
 	var result := resolution_state.advance_fixed_tick(delta, collect_resolution_motion())
 	resolve_elapsed = resolution_state.elapsed
@@ -499,17 +501,118 @@ func stop_projectile_outside_field() -> bool:
 	return true
 
 
+func settle_reached_projectile_on_ground() -> bool:
+	if resolution_state == null or match_state == null or not match_state.resolving_shot:
+		return false
+	var projectile := body_for_block(resolution_state.shot_block_id)
+	if projectile == null or not is_instance_valid(projectile) or not projectile.is_in_group("projectile"):
+		return false
+	if match_state.active_shot_block_id != resolution_state.shot_block_id:
+		return false
+	var attacker_id: int = match_state.active_shot_attacker_id
+	var attacker_index := -1
+	for index in match_state.players.size():
+		if match_state.players[index].id == attacker_id:
+			attacker_index = index
+			break
+	if attacker_index not in [0, 1]:
+		return false
+	var transform := projectile.global_transform if projectile.is_inside_tree() else projectile.transform
+	var position := transform.origin
+	if (attacker_index == 0 and position.x < 20.0) or (attacker_index == 1 and position.x > -20.0):
+		return false
+	var basis := transform.basis
+	var half_size := SiegeBlock.BLOCK_SIZE * 0.5
+	var vertical_extent := absf(basis.x.y) * half_size.x + absf(basis.y.y) * half_size.y + absf(basis.z.y) * half_size.z
+	var has_contact := projectile.get_contact_count() > 0
+	if has_contact:
+		projectile.linear_damp = 10.0
+	if not projectile_contact_is_settle_eligible(position.y - vertical_extent, projectile.linear_velocity, has_contact):
+		return false
+	projectile.linear_velocity = Vector3.ZERO
+	projectile.angular_velocity = Vector3.ZERO
+	projectile.sleeping = true
+	projectile.freeze = true
+	return true
+
+
+func projectile_contact_is_settle_eligible(bottom_y: float, linear_velocity: Vector3, has_contact: bool) -> bool:
+	var not_rebounding := linear_velocity.y <= 0.05
+	var physically_slow := linear_velocity.length() <= 0.5
+	var slow_physical_contact := has_contact and physically_slow and not_rebounding
+	var descended_to_field := bottom_y <= 0.035 and bottom_y >= -0.25 and physically_slow and not_rebounding
+	return slow_physical_contact or descended_to_field
+
+
+func damp_contacting_structure_bodies() -> int:
+	if resolution_state == null or match_state == null:
+		return 0
+	var damped_count := 0
+	for block_id in resolution_state.target_block_ids:
+		if block_id == resolution_state.shot_block_id:
+			continue
+		var body := body_for_block(block_id)
+		var record = match_state.blocks.get(block_id)
+		if body == null or not is_instance_valid(body) or record == null or not structure_contact_damping_is_eligible(record.location, record.is_ammo, body.get_contact_count()):
+			continue
+		# Resting stacks receive small solver impulses at their real contact points.
+		# Strong rotational damping dissipates that collision energy without
+		# changing position, zeroing velocity, or bypassing Godot's sleep rules.
+		body.linear_damp = 20.0
+		body.angular_damp = 40.0
+		damped_count += 1
+	return damped_count
+
+
+func structure_contact_damping_is_eligible(location: StringName, is_ammo: bool, contact_count: int) -> bool:
+	return not is_ammo and location in [&"fortress", &"weapon"] and contact_count > 0
+
+
+func collect_non_quiet_tracked_bodies() -> Array:
+	var diagnostics: Array = []
+	if resolution_state == null:
+		return diagnostics
+	for block_id in resolution_state.target_block_ids:
+		var body := body_for_block(block_id)
+		if body == null or not is_instance_valid(body):
+			continue
+		var linear_speed := body.linear_velocity.length()
+		var angular_speed := body.angular_velocity.length()
+		if linear_speed <= ResolutionState.MAX_LINEAR_SPEED and angular_speed <= ResolutionState.MAX_ANGULAR_SPEED:
+			continue
+		var position := body.global_position if body.is_inside_tree() else body.position
+		var record = match_state.blocks.get(block_id) if match_state != null else null
+		diagnostics.append({
+			"block_id": block_id,
+			"position": [position.x, position.y, position.z],
+			"linear_speed": linear_speed,
+			"angular_speed": angular_speed,
+			"record_location": String(record.location) if record != null else "missing",
+			"field_location": "below_field" if position.y < -2.0 else ("outside_field" if absf(position.x) >= FIELD_SIZE.x * 0.5 or absf(position.z) >= FIELD_SIZE.y * 0.5 else "playable_field"),
+		})
+	return diagnostics
+
+
 func web_test_snapshot() -> Dictionary:
 	var hud_strings: PackedStringArray = []
 	for label in [status_label, hint_label, debug_label, adjudication_label, block_total_label, timeout_error_label]:
 		if label != null:
 			hud_strings.append(label.text)
 	var projectile_position: Variant = null
+	var projectile_velocity: Variant = null
+	var projectile_contact_count := 0
+	var projectile_bottom_y: Variant = null
 	if web_last_shot_id >= 0:
 		var projectile := body_for_block(web_last_shot_id)
 		if projectile != null and is_instance_valid(projectile):
 			var position := projectile.global_position if projectile.is_inside_tree() else projectile.position
 			projectile_position = [position.x, position.y, position.z]
+			projectile_velocity = [projectile.linear_velocity.x, projectile.linear_velocity.y, projectile.linear_velocity.z]
+			projectile_contact_count = projectile.get_contact_count()
+			var basis := projectile.global_transform.basis if projectile.is_inside_tree() else projectile.transform.basis
+			var half_size := SiegeBlock.BLOCK_SIZE * 0.5
+			var vertical_extent := absf(basis.x.y) * half_size.x + absf(basis.y.y) * half_size.y + absf(basis.z.y) * half_size.z
+			projectile_bottom_y = position.y - vertical_extent
 	return {
 		"hud_strings": hud_strings,
 		"approved_korean_strings": APPROVED_KOREAN_STRINGS,
@@ -526,6 +629,10 @@ func web_test_snapshot() -> Dictionary:
 		"dragging": dragging,
 		"resolve_elapsed": resolve_elapsed,
 		"projectile_position": projectile_position,
+		"projectile_velocity": projectile_velocity,
+		"projectile_contact_count": projectile_contact_count,
+		"projectile_bottom_y": projectile_bottom_y,
+		"non_quiet_tracked_bodies": collect_non_quiet_tracked_bodies(),
 		"projectile_samples": web_projectile_samples.duplicate(true),
 		"camera_position": [camera.position.x, camera.position.y, camera.position.z],
 		"camera_forward": [-camera.global_basis.z.x, -camera.global_basis.z.y, -camera.global_basis.z.z],

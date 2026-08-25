@@ -212,6 +212,8 @@ func _verify_catapult_range() -> bool:
 	return true
 
 func _verify_bounded_resolution() -> bool:
+	if not _verify_reached_ground_settlement():
+		return false
 	for boundary_position in [Vector3(30.0, 1.0, 0.0), Vector3(-30.0, 1.0, 0.0), Vector3(0.0, 1.0, 15.0), Vector3(0.0, 1.0, -15.0), Vector3(0.0, -2.01, 0.0)]:
 		var main := Main.new()
 		root.add_child(main)
@@ -248,6 +250,75 @@ func _verify_bounded_resolution() -> bool:
 		main.create_ui()
 		main.update_ui()
 		if main.current_adjudication_state() == &"ready" and not main.hint_label.text.contains("[Enter]: 턴 종료"):
+			main.free()
+			return false
+		main.free()
+	return true
+
+func _verify_reached_ground_settlement() -> bool:
+	var damping_probe := Main.new()
+	if not damping_probe.structure_contact_damping_is_eligible(&"weapon", false, 1):
+		damping_probe.free()
+		return false
+	for ineligible in [[&"weapon", false, 0], [&"fortress", true, 1], [&"projectile", false, 1], [&"reserve", false, 1]]:
+		if damping_probe.structure_contact_damping_is_eligible(ineligible[0], ineligible[1], ineligible[2]):
+			damping_probe.free()
+			return false
+	damping_probe.free()
+	for player_index in 2:
+		var main := Main.new()
+		root.add_child(main)
+		main.create_match()
+		if player_index == 1 and not main.match_state.request_end_turn(main.match_state.active_player_id).accepted:
+			main.free()
+			return false
+		var attacker = main.match_state.players[player_index]
+		if not main.fire_weapon(attacker.id, attacker.weapons[0].id, Vector2(0, -240)):
+			main.free()
+			return false
+		var projectile = main.body_for_block(main.resolution_state.shot_block_id)
+		var target = main.body_for_block(main.resolution_state.target_block_ids[0])
+		var target_linear: Vector3 = target.linear_velocity
+		var reached_x := 20.0 if player_index == 0 else -20.0
+		var before_x := 19.99 if player_index == 0 else -19.99
+		projectile.position = Vector3(before_x, 0.1, 0.0)
+		projectile.linear_velocity = Vector3(1.0 if player_index == 0 else -1.0, -1.0, 0.0)
+		if main.settle_reached_projectile_on_ground():
+			main.free()
+			return false
+		projectile.position = Vector3(reached_x, 0.2, 0.0)
+		if main.settle_reached_projectile_on_ground():
+			main.free()
+			return false
+		if main.projectile_contact_is_settle_eligible(2.0, Vector3(0.5, 0.0, 0.0), false):
+			main.free()
+			return false
+		if main.projectile_contact_is_settle_eligible(2.0, Vector3(0.501, 0.0, 0.0), true):
+			main.free()
+			return false
+		if main.projectile_contact_is_settle_eligible(0.0, Vector3(0.501, 0.0, 0.0), false):
+			main.free()
+			return false
+		if main.projectile_contact_is_settle_eligible(2.0, Vector3(0.1, 0.051, 0.0), true):
+			main.free()
+			return false
+		if not main.projectile_contact_is_settle_eligible(2.0, Vector3(0.49, 0.0, 0.0), true):
+			main.free()
+			return false
+		projectile.position = Vector3(reached_x, 0.1, 0.0)
+		projectile.linear_velocity = Vector3(0.0, 0.2, 0.0)
+		if main.settle_reached_projectile_on_ground():
+			main.free()
+			return false
+		projectile.linear_velocity = Vector3(0.25, -0.1, 0.0)
+		projectile.angular_velocity = Vector3.ONE
+		if not main.settle_reached_projectile_on_ground():
+			main.free()
+			return false
+		if projectile.linear_velocity != Vector3.ZERO or projectile.angular_velocity != Vector3.ZERO or not projectile.sleeping or not projectile.freeze:
+			main.free()
+			return false
+		if target.linear_velocity != target_linear:
 			main.free()
 			return false
 		main.free()

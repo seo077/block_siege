@@ -281,7 +281,7 @@ async function turnLifecycleCase(cdp, baseUrl, evidence) {
     lastPhysicsElapsed = snapshot.resolve_elapsed ?? lastPhysicsElapsed;
     samples.push({ timestamp_ms: Date.now(), resolve_elapsed: snapshot.resolve_elapsed, position: snapshot.projectile_position, state: snapshot.adjudication_state, active_player: snapshot.active_player, round: snapshot.round, interaction_enabled: snapshot.interaction_enabled });
     if ((snapshot.projectile_position?.[0] >= 20 && lastPhysicsElapsed <= physicsDeadline) || snapshot.projectile_samples?.some(sample => sample.position?.[0] >= 20 && (sample.time ?? sample.resolve_elapsed ?? Infinity) <= physicsDeadline)) reached = true;
-    assert(snapshot.adjudication_state !== 'timeout', 'turn-lifecycle: resolution timed out');
+    assert(snapshot.adjudication_state !== 'timeout', `turn-lifecycle: resolution timed out: ${JSON.stringify({ projectile_position: snapshot.projectile_position, projectile_velocity: snapshot.projectile_velocity, projectile_contact_count: snapshot.projectile_contact_count, projectile_bottom_y: snapshot.projectile_bottom_y, non_quiet_tracked_bodies: snapshot.non_quiet_tracked_bodies })}`);
     if (snapshot.adjudication_state === 'ready') { sawReady = true; break; }
     assert(lastPhysicsElapsed <= physicsDeadline, `turn-lifecycle: resolving did not return to ready within ${physicsDeadline.toFixed(1)}s physics elapsed: ${JSON.stringify({ resolve_elapsed: lastPhysicsElapsed, last_snapshot: snapshot })}`);
 	await delay(16);

@@ -94,15 +94,90 @@ async function connectChrome() {
   assert(chrome, 'Chrome or Edge not installed');
   const profile = await mkdtemp(join(tmpdir(), 'block-siege-cdp-'));
   const port = 9300 + Math.floor(Math.random() * 500);
-  const child = spawn(chrome, [`--remote-debugging-port=${port}`, '--remote-allow-origins=*', `--user-data-dir=${profile}`, '--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run', '--window-size=1280,720', 'about:blank'], { stdio: 'ignore' });
-  let endpoint;
-  for (let i = 0; i < 100 && !endpoint; i++) {
-    try { endpoint = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl; } catch { await delay(100); }
+  const child = spawn(chrome, [`--remote-debugging-port=${port}`, '--remote-allow-origins=*', `--user-data-dir=${profile}`, '--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-networking', '--disable-component-update', '--disable-default-apps', '--disable-extensions', '--disable-sync', '--metrics-recording-only', '--no-first-run', '--window-size=1280,720', 'about:blank'], { stdio: 'ignore' });
+  let ws, cdp;
+  try {
+    let endpoint;
+    for (let i = 0; i < 100 && !endpoint; i++) {
+      try { endpoint = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl; } catch { await delay(100); }
+    }
+    assert(endpoint, 'Chrome DevTools endpoint did not start');
+    ws = new WebSocket(endpoint); await new Promise((ok, no) => { ws.onopen = ok; ws.onerror = no; });
+    cdp = new CDP(ws); cdp.debugPort = port;
+    return { cdp, child, profile, ws };
+  } catch (error) {
+    try { await closeChrome({ cdp, child, profile, ws }); }
+    catch (cleanupError) { error.cause = cleanupError; }
+    throw error;
   }
-  assert(endpoint, 'Chrome DevTools endpoint did not start');
-  const ws = new WebSocket(endpoint); await new Promise((ok, no) => { ws.onopen = ok; ws.onerror = no; });
-  const cdp = new CDP(ws); cdp.debugPort = port;
-  return { cdp, child, profile, ws };
+}
+
+function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve(true);
+  return new Promise(resolveExit => {
+    const timer = setTimeout(() => { child.off('exit', onExit); resolveExit(false); }, timeoutMs);
+    const onExit = () => { clearTimeout(timer); resolveExit(true); };
+    child.once('exit', onExit);
+  });
+}
+
+function runProcess(command, processArgs, timeoutMs = 20000) {
+  return new Promise((resolveProcess, rejectProcess) => {
+    const child = spawn(command, processArgs, { stdio: 'ignore' });
+    const timer = setTimeout(() => {
+      child.kill();
+      rejectProcess(new Error(`${command} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    child.once('error', error => { clearTimeout(timer); rejectProcess(error); });
+    child.once('exit', (code, signal) => { clearTimeout(timer); resolveProcess({ code, signal }); });
+  });
+}
+
+async function closeChrome(chrome) {
+  if (!chrome) return;
+  const errors = [];
+  let exited = chrome.child.exitCode !== null || chrome.child.signalCode !== null;
+  if (!exited) {
+    try {
+      await Promise.race([
+        chrome.cdp?.send('Browser.close'),
+        delay(3000).then(() => { throw new Error('Browser.close timed out'); }),
+      ]);
+    } catch { /* The process-exit check below is authoritative. */ }
+    exited = await waitForExit(chrome.child, 20000);
+  }
+  try { chrome.ws?.close(); } catch { /* The process-exit check below is authoritative. */ }
+  let treeStopped = exited;
+  if (process.platform === 'win32' && !exited) {
+    try {
+      const killed = await runProcess('taskkill', ['/pid', String(chrome.child.pid), '/t', '/f']);
+      if (killed.code !== 0 && chrome.child.exitCode === null && chrome.child.signalCode === null) throw new Error(`taskkill exited ${killed.code ?? killed.signal}`);
+      treeStopped = killed.code === 0;
+    } catch (error) { errors.push(error); }
+    exited = await waitForExit(chrome.child, 5000);
+  } else if (process.platform !== 'win32' && !exited) {
+    try { chrome.child.kill('SIGTERM'); } catch (error) { errors.push(error); }
+    exited = await waitForExit(chrome.child, 5000);
+    treeStopped = exited;
+  }
+  if (!exited) errors.push(new Error(`launched browser process ${chrome.child.pid} did not exit`));
+  if (treeStopped || process.platform !== 'win32') {
+    try { await rm(chrome.profile, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 }); } catch (error) { errors.push(error); }
+  } else {
+    errors.push(new Error(`temporary profile retained because browser tree ${chrome.child.pid} did not stop cleanly: ${chrome.profile}`));
+  }
+  if (errors.length) throw new AggregateError(errors, 'browser cleanup failed');
+}
+
+function closeServer(server) {
+  if (!server) return Promise.resolve();
+  return new Promise((resolveClose, rejectClose) => {
+    const forceTimer = setTimeout(() => server.closeAllConnections?.(), 3000);
+    server.close(error => {
+      clearTimeout(forceTimer);
+      if (error) rejectClose(error); else resolveClose();
+    });
+  });
 }
 
 async function evaluate(cdp, sessionId, expression) {
@@ -199,18 +274,21 @@ async function turnLifecycleCase(cdp, baseUrl, evidence) {
   await pressEnter(client); await delay(100);
   const during = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
   assert(during.active_player === 0 && during.round === 1, 'turn-lifecycle: Enter during resolution changed turn');
-  const deadline = Date.now() + 8000;
-  let reached = false, sawReady = false;
-  while (Date.now() < deadline) {
+  const wallDeadline = Date.now() + 30000, physicsDeadline = 8.0;
+  let reached = false, sawReady = false, lastPhysicsElapsed = snapshot.resolve_elapsed ?? 0;
+  while (Date.now() < wallDeadline) {
     snapshot = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
+    lastPhysicsElapsed = snapshot.resolve_elapsed ?? lastPhysicsElapsed;
     samples.push({ timestamp_ms: Date.now(), resolve_elapsed: snapshot.resolve_elapsed, position: snapshot.projectile_position, state: snapshot.adjudication_state, active_player: snapshot.active_player, round: snapshot.round, interaction_enabled: snapshot.interaction_enabled });
-    if (snapshot.projectile_position?.[0] >= 20 || snapshot.projectile_samples?.some(sample => sample.position?.[0] >= 20)) reached = true;
+    if ((snapshot.projectile_position?.[0] >= 20 && lastPhysicsElapsed <= physicsDeadline) || snapshot.projectile_samples?.some(sample => sample.position?.[0] >= 20 && (sample.time ?? sample.resolve_elapsed ?? Infinity) <= physicsDeadline)) reached = true;
     assert(snapshot.adjudication_state !== 'timeout', 'turn-lifecycle: resolution timed out');
     if (snapshot.adjudication_state === 'ready') { sawReady = true; break; }
+    assert(lastPhysicsElapsed <= physicsDeadline, `turn-lifecycle: resolving did not return to ready within ${physicsDeadline.toFixed(1)}s physics elapsed: ${JSON.stringify({ resolve_elapsed: lastPhysicsElapsed, last_snapshot: snapshot })}`);
 	await delay(16);
   }
+  assert(sawReady, `turn-lifecycle: wall cap reached before ready: ${JSON.stringify({ wall_cap_ms: 30000, resolve_elapsed: lastPhysicsElapsed, last_snapshot: snapshot })}`);
   assert(reached, 'turn-lifecycle: projectile did not reach x >= 20 within 8.0s');
-  assert(sawReady && snapshot.active_player === 0 && snapshot.round === 1 && snapshot.interaction_enabled, 'turn-lifecycle: resolving did not return to ready P1 input');
+  assert(lastPhysicsElapsed <= physicsDeadline && snapshot.active_player === 0 && snapshot.round === 1 && snapshot.interaction_enabled, 'turn-lifecycle: resolving did not return to ready P1 input within 8.0s physics elapsed');
   const p1Camera = snapshot.camera_position;
   await pressEnter(client); await delay(150);
   const after = await evaluate(client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
@@ -336,11 +414,12 @@ async function verifyDeploymentWorkflow(approvedBytes, liveBytes) {
 async function main() {
   const options = args(process.argv), evidence = resolve(options.evidence);
   await mkdir(evidence, { recursive: true });
-  const server = options.serve ? await serve(options.serve, options['base-url']) : null;
-  const chrome = await connectChrome();
-  console.log('CDP connected');
+  let server = null, chrome = null, primaryError = null;
   const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], workflow_result: options.serve ? 'local-not-applicable' : null };
   try {
+    server = options.serve ? await serve(options.serve, options['base-url']) : null;
+    chrome = await connectChrome();
+    console.log('CDP connected');
     console.log('CASE hud');
     const initial = await freshPage(chrome.cdp, options['base-url']);
     const runtime = await evaluate(initial.client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
@@ -368,10 +447,17 @@ async function main() {
       if (!options.serve) result.workflow_result = await verifyDeploymentWorkflow(checkedManifest.approvedBytes, checkedManifest.liveBytes);
     }
     result.verdict = 'PASS';
-  } catch (error) { result.errors.push(error.stack || String(error)); process.exitCode = 1; }
+  } catch (error) { primaryError = error; result.errors.push(error.stack || String(error)); process.exitCode = 1; }
   finally {
+    for (const cleanup of [() => closeChrome(chrome), () => closeServer(server)]) {
+      try { await cleanup(); }
+      catch (error) {
+        result.errors.push(error.stack || String(error));
+        process.exitCode = 1;
+        if (!primaryError) primaryError = error;
+      }
+    }
     await writeFile(join(evidence, 'result.json'), JSON.stringify(result, null, 2));
-    chrome.ws.close(); chrome.child.kill(); spawn('taskkill', ['/pid', String(chrome.child.pid), '/t', '/f'], { stdio: 'ignore' }); server?.close();
   }
   console.log(`${result.verdict}: ${result.cases.length} browser cases; evidence ${join(evidence, 'result.json')}`);
 }

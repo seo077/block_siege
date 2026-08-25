@@ -501,3 +501,5 @@
 ## Execution log (continued)
 
 - 2026-08-25: T-028 done at `f4dcb3c`; ephemeral CDP ports/profiles, PID/exit/stderr ownership evidence, independent server/navigation/bootstrap diagnostics, and exactly one cleaned pre-game retry made the exact four-command sequence pass twice (8/8), leaving no harness-owned Chrome, profile, or port listener.
+
+- 2026-08-25: Post-T-028 independent verification reported 15 PASS, 0 FAIL, and REQ-014/017 INCONCLUSIVE because the verifier environment denied deployed network access (`ERR_NETWORK_ACCESS_DENIED`); the verifier identity hook also refused its one-use VERIFY.md write. No implementation failure was found; continuation requires a verification-only SPEC amendment and renewed G0 approval rather than another identical verifier run.

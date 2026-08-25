@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "f54a53a5"
-next_action: "Run independent acceptance verification after T-028 browser startup correction"
-blocked_on: ""
+next_action: "Amend REQ-014/017 verification method for network-restricted independent verification, regenerate criteria, and request G0 re-approval"
+blocked_on: "Human approval of a verification-only SPEC amendment; independent verifier network was denied and its VERIFY.md capability write was refused"
 open_assumptions: []
 last_verified_commit: "a6dea47"
-head_commit: "a9010d9"
+head_commit: "f4dcb3c"
 updated_at: "2026-08-25"
 ---
 
@@ -104,3 +104,4 @@ updated_at: "2026-08-25"
 - 2026-08-25: Completed T-027 at 388a9df; Pages run 32835640391 succeeded with manifest bytes bound to its head, deployed REQ-012/013/014 passed, and the deployed lifecycle passed three consecutive times; next is independent verification.
 - 2026-08-25: Independent verification returned 15 PASS and REQ-014/017 FAIL: the deployed Chrome navigation became chrome-error with no canvas/bridge, and the later local lifecycle had canvas but no bridge after an earlier browser command; appended T-028 instead of rerunning the verifier.
 - 2026-08-25: Completed T-028 at f4dcb3c; ephemeral CDP ownership, startup diagnostics, and one clean pre-game retry passed the exact four-command sequence twice (8/8) with no harness process/profile/server leak; next is fresh independent verification.
+- 2026-08-25: Fresh independent verification reported 15 PASS, 0 FAIL, and REQ-014/017 INCONCLUSIVE because its environment denied deployed network access (`ERR_NETWORK_ACCESS_DENIED`); its one-use VERIFY.md write was also refused by the identity hook, so the prior written 15/17 report remains in VERIFY.md. Implementation and live evidence are preserved; resume with a verification-only SPEC amendment and G0 re-approval, not a blind verifier rerun.

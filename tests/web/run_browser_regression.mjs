@@ -5,15 +5,26 @@ import { resolve, join, extname, relative, isAbsolute } from 'node:path';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 
-const ORACLE = [
+const UNUSED_LEGACY_ORACLE = [
   '플레이어 1의 턴', '[1] 투석기  [2] 전차  |  마우스 드래그: 발사\n전차 선택 중 WASD: 이동  |  [Enter]: 턴 종료',
-  '투석기 선택', '전차 선택', '드래그가 너무 짧습니다', '이 병기는 이번 턴에 이미 발사했습니다',
-  '이 병기는 장전되지 않았습니다', '물리 판정 중…', '발사 판정 완료', '플레이어 %d 승리 — 요새 완파',
-  '턴 전환', '플레이어 %d 판정승', '무승부', '라운드 %d/%d  |  플레이어 %d  |  %s',
-  '예비 블럭 P1: %d  P2: %d  |  %s', '프로토타입 종료', '투석기', '전차',
 ];
 const BAD_TEXT = /\uFFFD|(?:Ã.|Â.|â€¦|â€”|í.|ì.|ë.|ðŸ)/u;
+
+export async function extractApprovedKoreanOracle(specPath) {
+  const source = await readFile(resolve(specPath), 'utf8');
+  const normative = source.match(/<!-- il:normative:begin -->([\s\S]*?)<!-- il:normative:end -->/u)?.[1];
+  assert(normative, 'approved SPEC has no normative section');
+  const requirement = normative.match(/(?:^|\n)REQ-012\s[\s\S]*?(?=\nREQ-013\s)/u)?.[0];
+  assert(requirement, 'approved SPEC has no normative REQ-012');
+  const listText = requirement.match(/REQ-012의 구현 독립 oracle은[^:]*:\s*([^\n]+?)\. 하네스/u)?.[1];
+  assert(listText, 'normative REQ-012 oracle sentence is missing or malformed');
+  const oracle = [...listText.matchAll(/`([^`]*)`/gu)].map(match => match[1].replaceAll('\\n', '\n'));
+  assert(oracle.length > 0, 'normative REQ-012 oracle list is empty');
+  assert(new Set(oracle).size === oracle.length, 'normative REQ-012 oracle contains duplicates');
+  return oracle;
+}
 
 function args(argv) {
   const out = {};
@@ -21,7 +32,7 @@ function args(argv) {
     if (!argv[i].startsWith('--') || argv[i + 1] === undefined) throw new Error(`Invalid argument ${argv[i]}`);
     out[argv[i].slice(2)] = argv[i + 1];
   }
-  for (const key of ['base-url', 'requirements', 'evidence']) if (!out[key]) throw new Error(`Missing --${key}`);
+  for (const key of ['base-url', 'requirements', 'evidence', 'oracle-spec']) if (!out[key]) throw new Error(`Missing --${key}`);
   return out;
 }
 
@@ -383,20 +394,21 @@ async function turnLifecycleCase(cdp, baseUrl, evidence) {
   return { name: 'turn-lifecycle', drag: [0, -240], during_resolution_enter: during, samples, reached_x_20: reached, resolved_ready: sawReady, after_turn: after, stable, screenshot };
 }
 
-async function utf8Checks(serveDir, runtime) {
-  assert(JSON.stringify(runtime.approved_korean_strings) === JSON.stringify(ORACLE), 'approved Korean oracle mismatch');
+async function utf8Checks(serveDir, runtime, oracle) {
+  const approvedStrings = process.env.BLOCK_SIEGE_COORDINATED_ORACLE_CORRUPTION
+    ? ['주입된 오염'] : runtime.approved_korean_strings;
+  assert(JSON.stringify(approvedStrings) === JSON.stringify(oracle), 'approved Korean oracle mismatch');
   assert(Array.isArray(runtime.missing_glyph_codepoints) && runtime.missing_glyph_codepoints.length === 0, `active HUD font missing glyphs: ${runtime.missing_glyph_codepoints}`);
   assert(runtime.hud_strings.length >= 5, 'runtime HUD fields missing');
   const hud = runtime.hud_strings.join('\n');
   assert(!BAD_TEXT.test(hud), 'runtime HUD contains mojibake/replacement characters');
   assert(runtime.hud_strings[0] === '라운드 1/20  |  플레이어 1  |  투석기', 'initial status HUD mismatch');
-  assert(runtime.hud_strings[1] === ORACLE[1], 'initial hint HUD mismatch');
+  assert(runtime.hud_strings[1] === oracle[1], 'initial hint HUD mismatch');
   assert(runtime.hud_strings[2].startsWith('예비 블럭 P1: 87  P2: 87  |  플레이어 1의 턴'), 'initial debug HUD mismatch');
-  assert((() => { try { assert('틀린 문자열' === ORACLE[0], 'negative self-test'); return false; } catch { return true; } })(), 'mismatch detector negative self-test failed');
   if (serveDir) {
     const source = await readFile(resolve('scripts/main.gd'), 'utf8');
     assert(!BAD_TEXT.test(source), 'source contains mojibake/replacement characters');
-    for (const s of ORACLE) assert(source.includes(s.replaceAll('\n', '\\n')), `source missing oracle string: ${s}`);
+    for (const s of oracle) assert(source.includes(s.replaceAll('\n', '\\n')), `source missing oracle string: ${s}`);
     for (const asset of ['index.html', 'index.js']) {
       const bytes = await readFile(resolve(serveDir, asset));
       const decoded = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
@@ -492,6 +504,34 @@ async function verifyDeploymentWorkflow(approvedBytes, liveBytes) {
 async function main() {
   const options = args(process.argv), evidence = resolve(options.evidence);
   await mkdir(evidence, { recursive: true });
+  if (options['negative-oracle-self-test']) {
+    assert(options['negative-oracle-self-test'] === 'coordinated-runtime-harness-corruption', 'unknown negative oracle self-test');
+    const nestedEvidence = join(evidence, 'nested-corruption');
+    const nestedArgs = process.argv.slice(2);
+    const flagIndex = nestedArgs.indexOf('--negative-oracle-self-test');
+    nestedArgs.splice(flagIndex, 2);
+    const evidenceIndex = nestedArgs.indexOf('--evidence');
+    nestedArgs[evidenceIndex + 1] = nestedEvidence;
+    const nested = await new Promise((resolveNested, rejectNested) => {
+      const child = spawn(process.execPath, [process.argv[1], ...nestedArgs], {
+        env: { ...process.env, BLOCK_SIEGE_COORDINATED_ORACLE_CORRUPTION: '1' },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let stdout = '', stderr = '';
+      child.stdout.setEncoding('utf8'); child.stderr.setEncoding('utf8');
+      child.stdout.on('data', data => { stdout += data; });
+      child.stderr.on('data', data => { stderr += data; });
+      child.once('error', rejectNested);
+      child.once('exit', code => resolveNested({ code, stdout, stderr }));
+    });
+    assert(nested.code !== 0, `coordinated corruption was incorrectly accepted: ${nested.stdout}`);
+    const nestedResult = JSON.parse(await readFile(join(nestedEvidence, 'result.json'), 'utf8'));
+    assert(nestedResult.verdict === 'FAIL' && nestedResult.errors.some(error => error.includes('approved Korean oracle mismatch')), 'nested failure was not the unchanged SPEC oracle rejection');
+    await writeFile(join(evidence, 'result.json'), JSON.stringify({ verdict: 'PASS', self_test: options['negative-oracle-self-test'], nested_exit_code: nested.code, nested_result: join(nestedEvidence, 'result.json') }, null, 2));
+    console.log('PASS coordinated-runtime-harness-corruption');
+    return;
+  }
+  const oracle = await extractApprovedKoreanOracle(options['oracle-spec']);
   let server = null, chrome = null, primaryError = null;
   const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], startup_attempts: [], server_readiness: null, workflow_result: options.serve ? 'local-not-applicable' : null };
   try {
@@ -503,7 +543,7 @@ async function main() {
     console.log('CASE hud');
     const initial = startup.initial;
     const runtime = await evaluate(initial.client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
-    await utf8Checks(options.serve, runtime); result.runtime_hud = runtime.hud_strings; result.approved_korean_strings = runtime.approved_korean_strings;
+    await utf8Checks(options.serve, runtime, oracle); result.runtime_hud = runtime.hud_strings; result.approved_korean_strings = runtime.approved_korean_strings; result.oracle_spec = resolve(options['oracle-spec']);
     const png = await initial.client.send('Page.captureScreenshot', { format: 'png' });
     result.hud_screenshot = join(evidence, 'hud.png'); await writeFile(result.hud_screenshot, Buffer.from(png.data, 'base64'));
     await chrome.cdp.send('Target.closeTarget', { targetId: initial.targetId });
@@ -542,4 +582,4 @@ async function main() {
   console.log(`${result.verdict}: ${result.cases.length} browser cases; evidence ${join(evidence, 'result.json')}`);
 }
 
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => { console.error(error); process.exitCode = 1; });

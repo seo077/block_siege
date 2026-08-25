@@ -22,6 +22,8 @@ static func create(p_id: int, p_owner_id: int, p_location: StringName, p_object_
 	return block
 
 func capture_baseline(p_transform: Transform3D) -> void:
+	if baseline_ready:
+		return
 	baseline_transform = p_transform
 	baseline_ready = true
 

@@ -546,3 +546,11 @@
     build/web-evidence/deployed-e2e/**
       Source-bound deployed lifecycle JSON/PNG evidence bound into the attested payload
 - verify:   Pages deployment succeeds, the live REQ-014/017 commands pass, offline attestation verification passes with independently supplied trusted roots, and fresh independent acceptance verification returns 17 PASS
+
+## Contract addenda
+
+- 2026-08-25: T-029's criterion names `tests/architecture/verify_core_state_boundary.mjs`; that path is the canonical executable. The originally listed `tests/verification/core_dependency_check.mjs` must remain as a thin compatibility entrypoint or shared module so both the task contract and approved criterion are satisfied.
+
+## Execution log (continued)
+
+- 2026-08-26: T-029 done; approved-SPEC oracle extraction and coordinated-corruption rejection passed the exact 11-case Chrome command, transitive core dependency closure plus indirect-helper/autoload negative fixture passed, and REQ-005 proved immutable per-block stable baselines and exact collapse thresholds.

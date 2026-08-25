@@ -463,6 +463,50 @@ func _verify_fixed_tick_resolution() -> bool:
 	return timeout.status == &"resolving" and timeout.elapsed == 0.0 and not timeout.retry_available
 
 func _verify_collapse_classification() -> bool:
+	var scenario = FixedScenario.build()
+	var baselines := {}
+	var ordinal := 0
+	for player in scenario.players:
+		var structure_ids: Array = player.fortress_block_ids.duplicate()
+		for weapon in player.weapons:
+			structure_ids.append_array(weapon.structure_block_ids)
+			if structure_ids.has(weapon.ammo_block_id):
+				return false
+		for block_id in structure_ids:
+			var structure = scenario.blocks[block_id] as BlockRecord
+			if structure.is_ammo or structure.baseline_ready:
+				return false
+			var stable_pose := Transform3D(Basis.IDENTITY, Vector3(ordinal, ordinal * 0.25, -ordinal))
+			structure.capture_baseline(stable_pose)
+			baselines[block_id] = stable_pose
+			ordinal += 1
+	# The probe is keyed by every structure block ID; adjudication and later
+	# synchronization attempts must not replace any independently stored pose.
+	var expected_structure_count := 0
+	for candidate in scenario.blocks.values():
+		if not candidate.is_ammo and candidate.location != &"reserve":
+			expected_structure_count += 1
+	if baselines.size() != expected_structure_count:
+		push_error("REQ-005 baseline count %d/%d" % [baselines.size(), expected_structure_count])
+		return false
+	for block_id in baselines:
+		var structure = scenario.blocks[block_id] as BlockRecord
+		structure.capture_baseline(Transform3D.IDENTITY)
+		if structure.baseline_transform != baselines[block_id]:
+			push_error("REQ-005 baseline overwritten %d" % block_id)
+			return false
+		var baseline: Transform3D = baselines[block_id]
+		var below: Transform3D = baseline.translated(Vector3(0.099998, 0.0, 0.0))
+		if structure.is_fallen_at(below) or not structure.is_fallen_at(baseline.translated(Vector3(0.1, 0.0, 0.0))):
+			push_error("REQ-005 translation threshold %d" % block_id)
+			return false
+		var below_rotation: Transform3D = baseline
+		below_rotation.basis = baseline.basis * Basis(Vector3.RIGHT, deg_to_rad(29.0))
+		var exact_rotation: Transform3D = baseline
+		exact_rotation.basis = baseline.basis * Basis(Vector3.RIGHT, deg_to_rad(30.0))
+		if structure.is_fallen_at(below_rotation) or not structure.is_fallen_at(exact_rotation):
+			push_error("REQ-005 rotation threshold %d" % block_id)
+			return false
 	var first := BlockRecord.create(1, 1, &"fortress", 1)
 	var second := BlockRecord.create(2, 1, &"fortress", 1)
 	var first_baseline := Transform3D(Basis.from_euler(Vector3(0.1, 0.2, 0.3)), Vector3(2.0, 3.0, 4.0))

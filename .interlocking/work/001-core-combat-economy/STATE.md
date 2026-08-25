@@ -5,7 +5,7 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "8359aee0"
-next_action: "Implement T-029 approved-SPEC oracle, core dependency-closure, and baseline verification contracts"
+next_action: "Implement T-030 authenticated offline deployment-evidence verification"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
@@ -17,8 +17,8 @@ updated_at: "2026-08-25"
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: T-001 through T-013 implemented and the prior 11 internal/headless requirements passed.
-- Now: E1 is reopened because the deployed browser path exposed broken Korean text and unusable drag firing that prior criteria did not cover.
+- Done: T-001 through T-029 implemented; approved-SPEC oracle, transitive core boundary, immutable baseline, and browser corruption rejection now pass.
+- Now: Implement T-030 authenticated offline deployment evidence so a network-restricted independent verifier can settle REQ-014/017.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -140,3 +140,4 @@ Candidate interlocking improvements:
 - 2026-08-25: Fresh independent il-spec-critic reviewed spec 8359aee0 and criteria 2829f5ce, returned READY with zero findings/blockers, and recorded REVIEW.md; G0 re-approval now awaits the human.
 - 2026-08-25: Human judged the interlocking loop too slow and requested a durable record for later plugin revision; added the detailed retrospective and six concrete framework improvement candidates above without changing SPEC, criteria, or the pending G0 action.
 - 2026-08-25: Human typed `il approve`; G0 re-approved spec 8359aee0 and criteria 2829f5ce, unlocking code edits for the remaining verification-contract implementation.
+- 2026-08-26: Completed T-029; REQ-002/005 Godot tests, transitive core dependency boundary with indirect-helper/autoload rejection, exact local REQ-012/013 Chrome run, and coordinated runtime+harness oracle-corruption self-test all passed; next is T-030.

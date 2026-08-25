@@ -93,20 +93,35 @@ async function connectChrome() {
   const chrome = ['C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'].find(existsSync);
   assert(chrome, 'Chrome or Edge not installed');
   const profile = await mkdtemp(join(tmpdir(), 'block-siege-cdp-'));
-  const port = 9300 + Math.floor(Math.random() * 500);
-  const child = spawn(chrome, [`--remote-debugging-port=${port}`, '--remote-allow-origins=*', `--user-data-dir=${profile}`, '--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-networking', '--disable-component-update', '--disable-default-apps', '--disable-extensions', '--disable-sync', '--metrics-recording-only', '--no-first-run', '--window-size=1280,720', 'about:blank'], { stdio: 'ignore' });
+  const port = await new Promise((ok, no) => {
+    const probe = createServer();
+    probe.once('error', no).listen(0, '127.0.0.1', () => {
+      const selected = probe.address().port;
+      probe.close(error => error ? no(error) : ok(selected));
+    });
+  });
+  const commandArgs = [`--remote-debugging-port=${port}`, '--remote-allow-origins=*', `--user-data-dir=${profile}`, '--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-background-networking', '--disable-component-update', '--disable-default-apps', '--disable-extensions', '--disable-sync', '--metrics-recording-only', '--no-first-run', '--window-size=1280,720', 'about:blank'];
+  const child = spawn(chrome, commandArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
+  const launch = { executable: chrome, args: commandArgs, root_pid: child.pid, profile, cdp_port: port, endpoint_owned: false, exit_code: null, exit_signal: null, stderr: '' };
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', chunk => { launch.stderr = (launch.stderr + chunk).slice(-16000); });
+  child.once('exit', (code, signal) => { launch.exit_code = code; launch.exit_signal = signal; });
   let ws, cdp;
   try {
     let endpoint;
     for (let i = 0; i < 100 && !endpoint; i++) {
       try { endpoint = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).webSocketDebuggerUrl; } catch { await delay(100); }
     }
-    assert(endpoint, 'Chrome DevTools endpoint did not start');
+    assert(endpoint, `Chrome DevTools endpoint did not start: ${JSON.stringify(launch)}`);
+    assert(child.exitCode === null && child.signalCode === null, `spawned Chrome exited before CDP ownership was established: ${JSON.stringify(launch)}`);
     ws = new WebSocket(endpoint); await new Promise((ok, no) => { ws.onopen = ok; ws.onerror = no; });
     cdp = new CDP(ws); cdp.debugPort = port;
-    return { cdp, child, profile, ws };
+    await cdp.send('Browser.getVersion');
+    launch.endpoint_owned = true;
+    return { cdp, child, profile, ws, launch };
   } catch (error) {
-    try { await closeChrome({ cdp, child, profile, ws }); }
+    error.launch = launch;
+    try { await closeChrome({ cdp, child, profile, ws, launch }); }
     catch (cleanupError) { error.cause = cleanupError; }
     throw error;
   }
@@ -161,6 +176,11 @@ async function closeChrome(chrome) {
     treeStopped = exited;
   }
   if (!exited) errors.push(new Error(`launched browser process ${chrome.child.pid} did not exit`));
+  chrome.child.stderr?.destroy();
+  if (chrome.launch) {
+    chrome.launch.exit_code = chrome.child.exitCode;
+    chrome.launch.exit_signal = chrome.child.signalCode;
+  }
   if (treeStopped || process.platform !== 'win32') {
     try { await rm(chrome.profile, { recursive: true, force: true, maxRetries: 12, retryDelay: 250 }); } catch (error) { errors.push(error); }
   } else {
@@ -190,7 +210,20 @@ async function freshPage(cdp, baseUrl) {
   const { targetId } = await cdp.send('Target.createTarget', { url: 'about:blank' });
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
   const client = { send: (method, params = {}) => cdp.send(method, params, sessionId) };
-  await client.send('Page.navigate', { url: baseUrl });
+  let navigation;
+  try {
+    navigation = await client.send('Page.navigate', { url: baseUrl });
+  } catch (error) {
+    error.startup_phase = 'navigation';
+    error.startup_diagnostics = { base_url: baseUrl, cdp_port: cdp.debugPort, error: error.message };
+    throw error;
+  }
+  if (navigation.errorText) {
+    const error = new Error(`navigation failed: ${navigation.errorText}`);
+    error.startup_phase = 'navigation';
+    error.startup_diagnostics = { base_url: baseUrl, cdp_port: cdp.debugPort, navigation };
+    throw error;
+  }
   const startedAt = Date.now(), timeoutMs = 30000, pollMs = 250;
   let attempts = 0, lastProbe = null, lastEvaluationError = null;
   while (Date.now() - startedAt < timeoutMs) {
@@ -215,10 +248,55 @@ async function freshPage(cdp, baseUrl) {
     await delay(pollMs);
   }
   const elapsedMs = Date.now() - startedAt;
-  if (!lastProbe?.ready) throw new Error(`Godot canvas/test bridge did not become ready within ${timeoutMs}ms: ${JSON.stringify({ base_url: baseUrl, elapsed_ms: elapsedMs, attempts, last_probe: lastProbe, last_evaluation_error: lastEvaluationError })}`);
+  if (!lastProbe?.ready) {
+    const diagnostics = { base_url: baseUrl, cdp_port: cdp.debugPort, navigation, elapsed_ms: elapsedMs, attempts, last_probe: lastProbe, last_evaluation_error: lastEvaluationError };
+    const error = new Error(`Web runtime bootstrap did not expose the Godot test bridge: ${JSON.stringify(diagnostics)}`);
+    error.startup_phase = 'runtime-bootstrap';
+    error.startup_diagnostics = diagnostics;
+    throw error;
+  }
   await delay(1000);
   const rect = await evaluate(client, undefined, `(() => { const c=document.querySelector('canvas'),r=c.getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height,cw:c.width,ch:c.height}; })()`);
   return { targetId, client, rect };
+}
+
+async function diagnoseServerReadiness(server, baseUrl) {
+  if (!server) return { kind: 'deployed', ready: true };
+  try {
+    const response = await fetch(baseUrl, { cache: 'no-store' });
+    const body = await response.text();
+    assert(response.ok, `local server returned HTTP ${response.status}`);
+    assert(/<canvas|index\.js|Godot/i.test(body), 'local server index response does not look like the Web export');
+    return { kind: 'local', ready: true, status: response.status, bytes: Buffer.byteLength(body) };
+  } catch (error) {
+    const diagnosed = new Error(`local server readiness failed independently of browser bootstrap: ${error.message}`);
+    diagnosed.startup_phase = 'server-readiness';
+    diagnosed.startup_diagnostics = { base_url: baseUrl, error: error.message };
+    throw diagnosed;
+  }
+}
+
+async function startBrowserAndBootstrap(baseUrl, attempts) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    let chrome = null;
+    const record = { attempt, outcome: 'failed', launch: null, phase: 'browser-launch', diagnostics: null };
+    attempts.push(record);
+    try {
+      chrome = await connectChrome();
+      record.launch = chrome.launch;
+      record.phase = 'runtime-bootstrap';
+      const initial = await freshPage(chrome.cdp, baseUrl);
+      record.outcome = 'ready';
+      record.phase = 'ready';
+      return { chrome, initial };
+    } catch (error) {
+      record.launch = chrome?.launch || error.launch || record.launch;
+      record.phase = error.startup_phase || record.phase;
+      record.diagnostics = error.startup_diagnostics || { error: error.message };
+      if (chrome) await closeChrome(chrome);
+      if (attempt === 2) throw new Error(`pre-bridge startup failed after one clean retry: ${JSON.stringify(attempts)}`, { cause: error });
+    }
+  }
 }
 
 async function dragCase(cdp, baseUrl, evidence, name, dx, dy, player = 0) {
@@ -415,13 +493,15 @@ async function main() {
   const options = args(process.argv), evidence = resolve(options.evidence);
   await mkdir(evidence, { recursive: true });
   let server = null, chrome = null, primaryError = null;
-  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], workflow_result: options.serve ? 'local-not-applicable' : null };
+  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], startup_attempts: [], server_readiness: null, workflow_result: options.serve ? 'local-not-applicable' : null };
   try {
     server = options.serve ? await serve(options.serve, options['base-url']) : null;
-    chrome = await connectChrome();
+    result.server_readiness = await diagnoseServerReadiness(server, options['base-url']);
+    const startup = await startBrowserAndBootstrap(options['base-url'], result.startup_attempts);
+    chrome = startup.chrome;
     console.log('CDP connected');
     console.log('CASE hud');
-    const initial = await freshPage(chrome.cdp, options['base-url']);
+    const initial = startup.initial;
     const runtime = await evaluate(initial.client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
     await utf8Checks(options.serve, runtime); result.runtime_hud = runtime.hud_strings; result.approved_korean_strings = runtime.approved_korean_strings;
     const png = await initial.client.send('Page.captureScreenshot', { format: 'png' });

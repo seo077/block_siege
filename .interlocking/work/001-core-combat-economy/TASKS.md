@@ -484,3 +484,20 @@
 ## Execution log (continued)
 
 - 2026-08-25: T-027 done at `388a9df`; Pages workflow 32835640391 succeeded, the live manifest bytes bound to that head, deployed REQ-012/013/014 passed once, and deployed REQ-015/016/017 passed three consecutive lifecycles.
+
+- 2026-08-25: Independent verification of `a6dea47..521cda1` returned 15 PASS and REQ-014/017 FAIL because deployed navigation became `chrome-error://chromewebdata/` with no canvas/bridge and a later local launch had canvas but no Godot bridge; added T-028 without rerunning the verifier.
+
+## T-028 Make fresh sequential browser startup deterministic with an existing user Chrome session
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-027
+- produces: |
+    tests/web/run_browser_regression.mjs
+      Browser launch records spawned root PID, isolated profile, exit code/stderr, CDP endpoint ownership, and retries a failed pre-bridge launch once with a new port/profile only after fully awaiting cleanup; it never attaches to or terminates the ordinary user Chrome tree
+      Local server readiness and Web runtime bootstrap are independently diagnosed so canvas-without-bridge and chrome-error navigation cannot be misclassified as gameplay failures
+- verify:   With an ordinary Chrome session left open, run local REQ-012/013, deployed REQ-012/013/014, local REQ-015/016/017, and deployed REQ-015/016/017 sequentially twice; every command exits 0 and no harness-owned Chrome/profile/server remains
+
+## Execution log (continued)
+
+- 2026-08-25: T-028 done at `f4dcb3c`; ephemeral CDP ports/profiles, PID/exit/stderr ownership evidence, independent server/navigation/bootstrap diagnostics, and exactly one cleaned pre-game retry made the exact four-command sequence pass twice (8/8), leaving no harness-owned Chrome, profile, or port listener.

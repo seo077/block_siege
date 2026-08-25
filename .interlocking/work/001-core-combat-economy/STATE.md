@@ -5,7 +5,7 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "f54a53a5"
-next_action: "Run independent acceptance verification for T-026 and T-027"
+next_action: "Run independent acceptance verification after T-028 browser startup correction"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
@@ -102,3 +102,5 @@ updated_at: "2026-08-25"
 - 2026-08-25: T-025 contact settlement left the reached projectile grounded and motionless, but another tracked structure body caused FAIL/PASS/FAIL lifecycle timeouts; blocked T-025 after two retries and appended T-026.
 - 2026-08-25: Completed T-026 at 2a58927; diagnostics identified contacting weapon blocks 7/8, contact-gated structure damping passed five consecutive local browser lifecycles, and REQ-004/009/015/016 remained PASS; appended T-027 for source-bound deployment.
 - 2026-08-25: Completed T-027 at 388a9df; Pages run 32835640391 succeeded with manifest bytes bound to its head, deployed REQ-012/013/014 passed, and the deployed lifecycle passed three consecutive times; next is independent verification.
+- 2026-08-25: Independent verification returned 15 PASS and REQ-014/017 FAIL: the deployed Chrome navigation became chrome-error with no canvas/bridge, and the later local lifecycle had canvas but no bridge after an earlier browser command; appended T-028 instead of rerunning the verifier.
+- 2026-08-25: Completed T-028 at f4dcb3c; ephemeral CDP ownership, startup diagnostics, and one clean pre-game retry passed the exact four-command sequence twice (8/8) with no harness process/profile/server leak; next is fresh independent verification.

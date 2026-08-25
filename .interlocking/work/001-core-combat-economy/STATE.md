@@ -5,7 +5,7 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "f54a53a5"
-next_action: "Run fresh independent acceptance verification after T-023"
+next_action: "Run independent acceptance verification for T-026 and T-027"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
@@ -97,3 +97,8 @@ updated_at: "2026-08-25"
 - 2026-08-25: Completed T-022 at c93e453; Pages workflow 32759884762 succeeded and the b17d402 live build passed the full deployed reach/resolution/Enter lifecycle.
 - 2026-08-25: Independent verification passed REQ-001 through REQ-013 and REQ-015 through REQ-017, but failed REQ-014 because workflow success was declared rather than independently queried; appended T-023.
 - 2026-08-25: Completed T-023 at a9010d9; live REQ-014 now independently binds a successful Pages workflow run head manifest to approved local and live manifest bytes.
+- 2026-08-25: Independent verification returned 15 PASS and REQ-014/017 FAIL after sequential harness runs leaked launched browser trees and later canvas/bridge startup failed; appended T-024.
+- 2026-08-25: T-024 cleanup/isolation fixed sequential bridge startup and made four local commands plus deployed REQ-014 pass, but deployed lifecycle still genuinely timed out; blocked T-024 after two retries and appended T-025.
+- 2026-08-25: T-025 contact settlement left the reached projectile grounded and motionless, but another tracked structure body caused FAIL/PASS/FAIL lifecycle timeouts; blocked T-025 after two retries and appended T-026.
+- 2026-08-25: Completed T-026 at 2a58927; diagnostics identified contacting weapon blocks 7/8, contact-gated structure damping passed five consecutive local browser lifecycles, and REQ-004/009/015/016 remained PASS; appended T-027 for source-bound deployment.
+- 2026-08-25: Completed T-027 at 388a9df; Pages run 32835640391 succeeded with manifest bytes bound to its head, deployed REQ-012/013/014 passed, and the deployed lifecycle passed three consecutive times; next is independent verification.

@@ -417,3 +417,70 @@
 ## Execution log (continued)
 
 - 2026-08-25: T-023 done at `a9010d9`; deployed verification now requires a real completed-successful master Pages run whose head commit raw manifest exactly matches approved local and live manifests, and records the independently queried workflow evidence.
+- 2026-08-25: Independent verification of `a6dea47..b32a491` returned 15 PASS and REQ-014/017 FAIL after earlier harness commands left launched browser trees alive; subsequent local/deployed runs could not initialize the bridge, so added T-024.
+
+## T-024 Make sequential browser verification own and await browser cleanup
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-023
+- produces: |
+    tests/web/run_browser_regression.mjs
+      async function closeChrome(chrome)
+      Closes and awaits only the browser process tree launched by this harness, removes its temporary profile, and awaits local server closure before exit so sequential verifier commands start cleanly
+- verify:   Run the local REQ-012/013 command, deployed REQ-012/013/014 command, local REQ-015/016/017 command, and deployed REQ-015/016/017 command sequentially; all exit 0 without growth in harness-owned browser processes
+
+## Execution log (continued)
+
+- 2026-08-25: T-024 blocked after two retries; awaited cleanup and isolated SwiftShader made four local sequential commands and deployed REQ-014 pass without bridge failures, but deployed lifecycle still produced a genuine projectile timeout. Added T-025 rather than rewriting T-024.
+
+## T-025 Settle a reached projectile deterministically on physical ground contact
+
+- state:    todo
+- covers:   REQ-015, REQ-016, REQ-017
+- depends:  T-021
+- produces: |
+    scripts/main.gd
+      func settle_reached_projectile_on_ground() -> bool
+      Only the active projectile, after reaching the opponent deployment boundary and physically descending to ground contact, enters sleep with zero bounce/high friction; no elapsed-time or blanket body settling
+    tests/regression_runner.gd
+      Both-player reached-ground settlement boundaries and no-premature-settle fixtures
+    tests/web/run_browser_regression.mjs
+      Retains T-024 isolated sequential verification and physics-time lifecycle assertions
+- verify:   Run local and deployed REQ-015/016/017 commands three consecutive times each after a fresh export; every lifecycle reaches, resolves ready without timeout, and turns to player 2
+
+## Execution log (continued)
+
+- 2026-08-25: T-025 blocked after two retries; opponent-reached contact settling made the projectile grounded with zero velocity, but local lifecycle remained FAIL/PASS/FAIL because another tracked structure body prevented the 0.6-second quiet interval. Added T-026.
+
+## T-026 Contain and settle displaced structure bodies within the playable physics field
+
+- state:    todo
+- covers:   REQ-004, REQ-016, REQ-017
+- depends:  T-021
+- produces: |
+    scripts/main.gd
+      Physical field containment/catch geometry or body-specific contact response derived from timed-out moving-body diagnostics, allowing displaced structure blocks to land and naturally satisfy thresholds without elapsed-time forcing
+    tests/web/run_browser_regression.mjs
+      Timeout evidence identifies every non-quiet tracked body by block id, position, linear/angular speeds, and location
+- verify:   Fresh-export local REQ-015/016/017 lifecycle passes five consecutive times; headless REQ-004/009/015/016 remain PASS
+
+## Execution log (continued)
+
+- 2026-08-25: T-026 done at `2a58927`; timed-out diagnostics identified contacting weapon blocks 7/8 as the remaining non-quiet bodies, contact-gated structure damping passed five consecutive fresh-export local lifecycles, and REQ-004/009/015/016 all remained PASS.
+
+## T-027 Deploy and verify the physically stable Web lifecycle
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-026
+- produces: |
+    build/web/**
+      Fresh Godot Web export whose SHA-256 manifest names source commit 2a58927 and covers every deployed relative asset
+    build/web-evidence/deployed-e2e/**
+      Live Chrome JSON/PNG evidence for opponent-boundary reach, resolving-to-ready without timeout, and exactly-once Enter transition to player 2 in round 1
+- verify:   Push the manifest-bearing build through the existing Pages workflow, require completed success bound to the manifest head, then run deployed REQ-012/013/014 and REQ-015/016/017 commands; lifecycle passes three consecutive times
+
+## Execution log (continued)
+
+- 2026-08-25: T-027 done at `388a9df`; Pages workflow 32835640391 succeeded, the live manifest bytes bound to that head, deployed REQ-012/013/014 passed once, and deployed REQ-015/016/017 passed three consecutive lifecycles.

@@ -580,3 +580,16 @@
 - verify:   A fresh Pages/attestation run succeeds, downloaded REQ-014/017 artifacts contain every payload-listed file including `.nojekyll`, and both offline positive commands pass
 
 - 2026-08-26: T-032 parser correction accepted the official external trusted root, then T-031 positive verification found the Actions artifact omitted payload-listed `live-assets/.nojekyll` because upload-artifact excludes hidden files by default; appended T-033.
+
+## T-034 Replace synthetic range/resolution checks with required physical end-to-end fixtures
+
+- state:    todo
+- covers:   REQ-015, REQ-016
+- depends:  T-033
+- produces: |
+    tests/regression_runner.gd
+      REQ-015 emits independently sampled per-player 40/120/240 px physical trajectory progress and opposing-zone reach from fresh fixed scenarios without hard-coded origin or synthetic trajectory substitution
+      REQ-016 runs both named player end-to-end catapult shots through real fixed-tick resolution and asserts the complete x/z/y inside, equal, and outside boundary matrix plus duplicate-resolution, resolving-Enter, and ready-HUD cases without teleporting the end-to-end projectile
+- verify:   Run the exact REQ-015 and REQ-016 criteria commands and inspect every required named sample/subcase, then rerun independent acceptance verification
+
+- 2026-08-26: Fresh independent verification of a6dea47..2507b05 returned 13 PASS and REQ-014/015/016/017 FAIL; REQ-014/017 lacked verifier environment for the approved offline route, while REQ-015/016 exposed synthetic/teleport fixtures that did not prove the required physical samples and full boundary matrix; appended T-034 for the product-evidence gap.

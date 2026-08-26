@@ -20,6 +20,7 @@ const UiDiagnostics = preload("res://tests/fixtures/ui_diagnostics.gd")
 const FullRegression = preload("res://tests/fixtures/full_regression.gd")
 
 func _init() -> void:
+	Engine.physics_ticks_per_second = 100
 	var options := parse_arguments(OS.get_cmdline_user_args())
 	if not options.valid:
 		report_failure("arguments", "command line", options.error)
@@ -27,7 +28,15 @@ func _init() -> void:
 		return
 	var repeat_count: int = options.repeat
 	var requirement: String = options.requirement
-	var passed := run_all(repeat_count) if options.all else (_run_req010(repeat_count) if requirement == "REQ-010" else run_requirement(requirement))
+	var passed: bool
+	if requirement == "REQ-015":
+		passed = await _verify_catapult_range()
+	elif requirement == "REQ-016":
+		passed = await _verify_bounded_resolution()
+	elif options.all or requirement == "REQ-010":
+		passed = await run_all(repeat_count)
+	else:
+		passed = run_requirement(requirement)
 	if passed:
 		print("PASS %s" % requirement)
 	else:
@@ -55,17 +64,13 @@ func run_requirement(requirement: String) -> bool:
 		"REQ-009":
 			return _verify_timeout_retry()
 		"REQ-010":
-			return _run_req010(1)
+			return false # The full async matrix is dispatched directly from _init().
 		"REQ-010-UI":
 			return _verify_ui_diagnostics()
 		"REQ-012":
 			return _verify_utf8_hud()
 		"REQ-013":
 			return _verify_drag_launch()
-		"REQ-015":
-			return _verify_catapult_range()
-		"REQ-016":
-			return _verify_bounded_resolution()
 		_:
 			push_error("Unknown requirement: %s" % requirement)
 			return false
@@ -108,13 +113,17 @@ func run_all(repeat_count: int = 1) -> bool:
 			var requirement: String = scenario.requirement
 			var fixture: String = scenario.fixture
 			print("RUN %s [%s]" % [requirement, fixture])
-			if not run_requirement(requirement):
+			var passed: bool
+			if requirement == "REQ-015":
+				passed = await _verify_catapult_range()
+			elif requirement == "REQ-016":
+				passed = await _verify_bounded_resolution()
+			else:
+				passed = run_requirement(requirement)
+			if not passed:
 				report_failure(requirement, fixture, "verifier returned false in repetition %d" % repetition)
 				return false
 	return true
-
-func _run_req010(repeat_count: int) -> bool:
-	return run_all(repeat_count)
 
 func report_failure(requirement, fixture, detail) -> void:
 	push_error("REGRESSION FAILURE requirement=%s fixture=%s detail=%s" % [requirement, fixture, detail])
@@ -175,35 +184,50 @@ func _verify_drag_launch() -> bool:
 
 func _sample_catapult_progress(player_index: int, drag_length: float) -> Dictionary:
 	var main := Main.new()
-	var solution: Dictionary = main.launch_solution(player_index, 0, Vector2(0, -drag_length))
-	main.free()
-	if not solution.get("accepted", false):
-		return {"maximum": -INF, "behind": true, "reached": false}
+	root.add_child(main)
+	main.create_match()
+	await physics_frame
+	if player_index == 1 and not main.match_state.request_end_turn(main.match_state.active_player_id).accepted:
+		main.free()
+		return {"valid": false}
+	var attacker = main.match_state.players[player_index]
+	if not main.fire_weapon(attacker.id, attacker.weapons[0].id, Vector2(0, -drag_length)):
+		main.free()
+		return {"valid": false}
+	var projectile = main.body_for_block(main.resolution_state.shot_block_id)
+	var origin: Vector3 = projectile.global_position if projectile.is_inside_tree() else projectile.position
 	var direction_sign := 1.0 if player_index == 0 else -1.0
-	var origin_x := -23.5 if player_index == 0 else 23.5
-	var position := Vector3(origin_x, 0.55, -2.0)
-	var velocity: Vector3 = solution.impulse
 	var maximum := 0.0
 	var behind := false
 	var reached := false
+	var reached_sample := {}
+	var samples: Array = []
 	for tick in 800:
-		velocity += Vector3.DOWN * 9.8 * 0.01
-		position += velocity * 0.01
-		var progress := (position.x - origin_x) * direction_sign
+		await physics_frame
+		if not is_instance_valid(projectile):
+			break
+		var position: Vector3 = projectile.global_position
+		var time: float = main.resolve_elapsed
+		var progress := (position.x - origin.x) * direction_sign
 		maximum = maxf(maximum, progress)
 		behind = behind or progress < -0.0001
-		if (player_index == 0 and position.x >= 20.0) or (player_index == 1 and position.x <= -20.0):
+		if tick == 0 or tick % 10 == 9:
+			samples.append({"time": time, "position": [position.x, position.y, position.z], "opponent_progress": progress})
+		if not reached and ((player_index == 0 and position.x >= 20.0) or (player_index == 1 and position.x <= -20.0)):
 			reached = true
-		if position.y <= 0.1:
+			reached_sample = {"time": time, "position": [position.x, position.y, position.z], "opponent_progress": progress}
+		if main.current_adjudication_state() != &"resolving":
 			break
-	return {"maximum": maximum, "behind": behind, "reached": reached}
+	print("REQ-015 trajectory player=%d drag=%d origin=%s maximum_progress=%.6f reached=%s reached_sample=%s samples=%s" % [player_index + 1, int(drag_length), origin, maximum, reached, JSON.stringify(reached_sample), JSON.stringify(samples)])
+	main.free()
+	return {"valid": true, "maximum": maximum, "behind": behind, "reached": reached, "samples": samples}
 
 func _verify_catapult_range() -> bool:
 	for player_index in 2:
 		var samples: Array = []
 		for drag_length in [40.0, 120.0, 240.0]:
-			samples.append(_sample_catapult_progress(player_index, drag_length))
-		if samples.any(func(sample): return sample.behind):
+			samples.append(await _sample_catapult_progress(player_index, drag_length))
+		if samples.any(func(sample): return not sample.get("valid", false) or sample.behind or sample.samples.is_empty()):
 			return false
 		if not (samples[0].maximum < samples[1].maximum and samples[1].maximum < samples[2].maximum):
 			return false
@@ -214,7 +238,17 @@ func _verify_catapult_range() -> bool:
 func _verify_bounded_resolution() -> bool:
 	if not _verify_reached_ground_settlement():
 		return false
-	for boundary_position in [Vector3(30.0, 1.0, 0.0), Vector3(-30.0, 1.0, 0.0), Vector3(0.0, 1.0, 15.0), Vector3(0.0, 1.0, -15.0), Vector3(0.0, -2.01, 0.0)]:
+	for player_index in 2:
+		if not await _verify_physical_catapult_resolution(player_index):
+			return false
+	var boundary_cases := [
+		["x-positive-inside", Vector3(29.999, 1.0, 0.0), false], ["x-positive-equal", Vector3(30.0, 1.0, 0.0), true], ["x-positive-outside", Vector3(30.001, 1.0, 0.0), true],
+		["x-negative-inside", Vector3(-29.999, 1.0, 0.0), false], ["x-negative-equal", Vector3(-30.0, 1.0, 0.0), true], ["x-negative-outside", Vector3(-30.001, 1.0, 0.0), true],
+		["z-positive-inside", Vector3(0.0, 1.0, 14.999), false], ["z-positive-equal", Vector3(0.0, 1.0, 15.0), true], ["z-positive-outside", Vector3(0.0, 1.0, 15.001), true],
+		["z-negative-inside", Vector3(0.0, 1.0, -14.999), false], ["z-negative-equal", Vector3(0.0, 1.0, -15.0), true], ["z-negative-outside", Vector3(0.0, 1.0, -15.001), true],
+		["y-inside", Vector3(0.0, -1.999, 0.0), false], ["y-equal", Vector3(0.0, -2.0, 0.0), false], ["y-outside", Vector3(0.0, -2.001, 0.0), true],
+	]
+	for boundary_case in boundary_cases:
 		var main := Main.new()
 		root.add_child(main)
 		main.create_match()
@@ -224,36 +258,73 @@ func _verify_bounded_resolution() -> bool:
 			return false
 		var shot_id: int = main.resolution_state.shot_block_id
 		var projectile = main.body_for_block(shot_id)
-		projectile.position = boundary_position
+		projectile.position = boundary_case[1]
 		projectile.linear_velocity = Vector3(3, 4, 5)
 		projectile.angular_velocity = Vector3.ONE
-		if not main.stop_projectile_outside_field() or not projectile.freeze:
+		var stopped: bool = main.stop_projectile_outside_field()
+		print("REQ-016 boundary case=%s position=%s stopped=%s" % [boundary_case[0], boundary_case[1], stopped])
+		if stopped != boundary_case[2]:
 			main.free()
 			return false
-		if projectile.linear_velocity != Vector3.ZERO or projectile.angular_velocity != Vector3.ZERO or main.body_for_block(shot_id) != projectile:
-			main.free()
-			return false
-		var turn_before: int = main.match_state.active_player_id
-		main.end_turn()
-		if main.match_state.active_player_id != turn_before:
-			main.free()
-			return false
-		for tick in 15:
-			main.advance_resolution(0.1)
-		if main.current_adjudication_state() not in [&"ready", &"final"] or main.match_state.resolution_apply_count() != 1:
-			main.free()
-			return false
-		main.finish_shot_resolution()
-		if main.match_state.resolution_apply_count() != 1:
-			main.free()
-			return false
-		main.create_ui()
-		main.update_ui()
-		if main.current_adjudication_state() == &"ready" and not main.hint_label.text.contains("[Enter]: 턴 종료"):
+		if stopped and (not projectile.freeze or projectile.linear_velocity != Vector3.ZERO or projectile.angular_velocity != Vector3.ZERO or main.body_for_block(shot_id) != projectile):
 			main.free()
 			return false
 		main.free()
 	return true
+
+func _verify_physical_catapult_resolution(player_index: int) -> bool:
+	var case_name := "player-%d-catapult-240px-zero-lateral" % (player_index + 1)
+	var main := Main.new()
+	root.add_child(main)
+	main.create_match()
+	main.create_ui()
+	await physics_frame
+	if player_index == 1 and not main.match_state.request_end_turn(main.match_state.active_player_id).accepted:
+		main.free()
+		return false
+	main._sync_scene_mirrors()
+	var attacker = main.match_state.players[player_index]
+	if not main.fire_weapon(attacker.id, attacker.weapons[0].id, Vector2(0, -240)):
+		main.free()
+		return false
+	var shot_id: int = main.resolution_state.shot_block_id
+	var projectile = main.body_for_block(shot_id)
+	var origin: Vector3 = projectile.global_position if projectile.is_inside_tree() else projectile.position
+	var turn_before: int = main.match_state.active_player_id
+	main.end_turn()
+	if main.match_state.active_player_id != turn_before:
+		main.free()
+		return false
+	var max_elapsed := 0.0
+	var max_quiet := 0.0
+	var reached := false
+	var reached_sample := {}
+	var timed_out := false
+	var samples: Array = []
+	for tick in 800:
+		await physics_frame
+		if is_instance_valid(projectile):
+			var position: Vector3 = projectile.global_position
+			if tick == 0 or tick % 10 == 9:
+				samples.append({"time": main.resolve_elapsed, "position": [position.x, position.y, position.z]})
+			if not reached and (position.x >= 20.0 if player_index == 0 else position.x <= -20.0):
+				reached = true
+				reached_sample = {"time": main.resolve_elapsed, "position": [position.x, position.y, position.z]}
+		max_elapsed = maxf(max_elapsed, main.resolve_elapsed)
+		max_quiet = maxf(max_quiet, main.quiet_elapsed)
+		timed_out = timed_out or main.current_adjudication_state() == &"timeout"
+		if main.current_adjudication_state() != &"resolving":
+			break
+	main.update_ui()
+	var ready := main.current_adjudication_state() == &"ready"
+	var apply_once := main.match_state.resolution_apply_count() == 1
+	main.finish_shot_resolution()
+	var duplicate_locked := main.match_state.resolution_apply_count() == 1
+	var hud_ready := ready and main.hint_label.text.contains("[Enter]: 턴 종료")
+	print("REQ-016 case=%s origin=%s reached=%s reached_sample=%s timeout=%s max_elapsed=%.6f max_quiet=%.6f ready=%s apply_once=%s duplicate_locked=%s hud_ready=%s samples=%s" % [case_name, origin, reached, JSON.stringify(reached_sample), timed_out, max_elapsed, max_quiet, ready, apply_once, duplicate_locked, hud_ready, JSON.stringify(samples)])
+	var passed := reached and not timed_out and max_elapsed >= 0.8 and max_quiet >= 0.6 and ready and apply_once and duplicate_locked and hud_ready
+	main.free()
+	return passed
 
 func _verify_reached_ground_settlement() -> bool:
 	var damping_probe := Main.new()

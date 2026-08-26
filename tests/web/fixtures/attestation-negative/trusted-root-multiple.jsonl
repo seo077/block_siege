@@ -1,2 +1,2 @@
-{"mediaType":"application/vnd.dev.sigstore.trustedroot.v0.1+json","trustedRoot":{"certificateAuthorities":[]}}
-{"mediaType":"application/vnd.dev.sigstore.trustedroot.v0.2+json","trustedRoot":{"certificateAuthorities":[],"transparencyLogs":[]}}
+{"mediaType":"application/vnd.dev.sigstore.trustedroot+json;version=0.1","certificateAuthorities":[]}
+{"mediaType":"application/vnd.dev.sigstore.trustedroot.v0.1+json","trustedRoot":{"certificateAuthorities":[],"transparencyLogs":[]}}

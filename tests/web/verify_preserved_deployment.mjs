@@ -47,12 +47,20 @@ async function commandBytes(name, argv, cwd) {
 async function repositoryRoot() { return resolve(await command('git', ['rev-parse', '--show-toplevel'], process.cwd())); }
 function outside(path, root) { const rel = relative(root, path); return rel.startsWith('..') && !isAbsolute(rel); }
 
-function parseTrustedRootRecords(bytes) {
+const SUPPORTED_TRUSTED_ROOT_MEDIA_TYPES = new Set([
+  'application/vnd.dev.sigstore.trustedroot+json;version=0.1',
+  'application/vnd.dev.sigstore.trustedroot.v0.1+json'
+]);
+
+export function parseTrustedRootRecords(bytes) {
   const records = bytes.toString('utf8').split(/\r?\n/u).filter(line => line.trim()).map((line, index) => {
     try { return JSON.parse(line); } catch { fail(`trusted root JSONL record ${index + 1} is invalid JSON`); }
   });
   assert(records.length > 0, 'trusted root JSONL is empty');
-  assert(records.some(record => /^application\/vnd\.dev\.sigstore\.trustedroot\.v0\.\d+\+json$/u.test(record.mediaType)), 'trusted root JSONL has no Sigstore trusted-root record');
+  records.forEach((record, index) => {
+    assert(record && typeof record === 'object' && !Array.isArray(record), `trusted root JSONL record ${index + 1} is not an object`);
+    assert(typeof record.mediaType === 'string' && SUPPORTED_TRUSTED_ROOT_MEDIA_TYPES.has(record.mediaType), `trusted root JSONL record ${index + 1} has unsupported Sigstore trusted-root media type`);
+  });
   return records;
 }
 
@@ -198,6 +206,11 @@ async function negativeSelfTest(options) {
   assert(JSON.stringify(declared) === JSON.stringify(cases), 'negative fixture declaration is incomplete or out of order');
   const rootRecords = parseTrustedRootRecords(await readFile(resolve(options.fixtures, 'trusted-root-multiple.jsonl')));
   assert(rootRecords.length === 2, 'JSONL trusted-root fixture did not preserve multiple records');
+  for (const fixture of ['trusted-root-malformed.jsonl', 'trusted-root-unsupported.jsonl']) {
+    try { parseTrustedRootRecords(await readFile(resolve(options.fixtures, fixture))); }
+    catch { continue; }
+    fail(`invalid trusted-root fixture accepted: ${fixture}`);
+  }
   const headFixture = await json(resolve(options.fixtures, 'head-selection.json'));
   assert(statementHead(headFixture.verificationResult) === headFixture.expectedHead, 'exact source head selection failed with unrelated commit digests');
   const temp = await mkdtemp(join(tmpdir(), 'block-siege-gh-reject-'));

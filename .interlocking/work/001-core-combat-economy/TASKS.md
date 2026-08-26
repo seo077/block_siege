@@ -605,3 +605,5 @@
 - verify:   Seed known authenticated deployed/deployed-e2e payloads, run both deployed commands under explicit network denial, prove nonzero exit and byte-identical preserved payload/bundle/evidence trees, then run both offline positive commands and independent verification
 
 - 2026-08-26: Independent REQ-014/017 fallback exposed that a failed network-denied live probe overwrote authenticated `deployed*` payloads before offline verification, changing attested payload hashes 16e5dc/2c5bb4 to 91ee22/a432d9; appended T-035 for atomic evidence preservation.
+- 2026-08-26: T-035 done at 0ea15d6; atomic staging/publish preservation, deterministic failed-probe preservation, local browser checks, authenticated offline positives, and all 18 negative cases passed.
+- 2026-08-26: T-031 done; Pages/attestation runs succeeded, final authenticated artifacts verified against external trusted root SHA-256 db07310827da2ae2798ec7eefc5daf8432506ce458d5bc30cd2feba03708d239, and fresh independent acceptance returned 17 PASS/0 FAIL/0 INCONCLUSIVE. VERIFY.md recording was refused only by the Codex hyphenated-agent-identity incompatibility.

@@ -5,11 +5,11 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "8359aee0"
-next_action: "Implement T-035 atomic preservation of authenticated evidence, then rerun final independent verification"
+next_action: "E1 complete; select the next epic"
 blocked_on: ""
 open_assumptions: []
-last_verified_commit: "a6dea47"
-head_commit: "fd4c68b"
+last_verified_commit: "0ea15d6"
+head_commit: "0ea15d6"
 updated_at: "2026-08-26"
 ---
 
@@ -17,8 +17,8 @@ updated_at: "2026-08-26"
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: T-001 through T-030 implemented; authenticated offline deployment evidence, external trust-root enforcement, and 18 tamper-rejection paths now pass.
-- Now: Make failed deployed probes preserve authenticated evidence atomically in T-035, restore the attested artifact, then rerun final independent verification.
+- Done: T-001 through T-035 and T-031 final deployment/attestation verification completed; fresh independent acceptance returned 17 PASS, 0 FAIL, 0 INCONCLUSIVE at 0ea15d6.
+- Now: E1 is complete; select the next epic.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -146,3 +146,4 @@ Candidate interlocking improvements:
 - 2026-08-26: T-032 accepted the official trusted root and retained 18 negative rejections; T-031 positive verification then proved the artifact upload omitted payload-listed hidden `.nojekyll`, so appended T-033 to preserve hidden evidence assets before re-attestation.
 - 2026-08-26: T-033 re-attestation run 32950163716 and both authenticated offline positives passed, but fresh independent verification returned 13 PASS/4 FAIL: REQ-014/017 could not access the approved external verification environment and REQ-015/016 found synthetic/teleport fixture gaps; appended T-034 for the substantive acceptance gap.
 - 2026-08-26: T-034 raised independent coverage to 15/17; REQ-014/017 fallback then revealed failed network probes overwrite the preserved attested payload before offline verification, so appended T-035 for atomic evidence publication.
+- 2026-08-26: Completed T-035 at 0ea15d6; failed live probes preserve authenticated evidence byte-for-byte, local REQ-014/017 and both Sigstore offline positives passed, and fresh independent acceptance returned 17 PASS/0 FAIL/0 INCONCLUSIVE. Codex rejected the verifier's VERIFY.md write because canonical task names cannot equal the hook-required hyphenated `il-verifier`; the returned verdict and this compatibility limitation are preserved here.

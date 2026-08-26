@@ -32,7 +32,9 @@ function args(argv) {
     if (!argv[i].startsWith('--') || argv[i + 1] === undefined) throw new Error(`Invalid argument ${argv[i]}`);
     out[argv[i].slice(2)] = argv[i + 1];
   }
-  for (const key of ['base-url', 'requirements', 'evidence', 'oracle-spec']) if (!out[key]) throw new Error(`Missing --${key}`);
+  for (const key of ['base-url', 'requirements', 'evidence']) if (!out[key]) throw new Error(`Missing --${key}`);
+  const requirements = out.requirements.split(',');
+  if (requirements.some(requirement => ['REQ-012', 'REQ-013', 'REQ-014'].includes(requirement)) && !out['oracle-spec']) throw new Error('Missing --oracle-spec');
   return out;
 }
 
@@ -419,7 +421,7 @@ async function utf8Checks(serveDir, runtime, oracle) {
 
 async function sha256(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
 
-async function manifestChecks(manifestPath, baseUrl) {
+async function manifestChecks(manifestPath, baseUrl, evidence) {
   assert(manifestPath, 'REQ-014 requires --manifest');
   const localPath = resolve(manifestPath);
   const approvedBytes = await readFile(localPath);
@@ -431,6 +433,7 @@ async function manifestChecks(manifestPath, baseUrl) {
   assert(liveResponse.ok, `live manifest fetch failed: HTTP ${liveResponse.status}`);
   const liveBytes = Buffer.from(await liveResponse.arrayBuffer());
   const live = JSON.parse(liveBytes.toString('utf8'));
+  await writeFile(join(evidence, 'live-build-manifest.json'), liveBytes);
   assert(live.source_commit === approved.source_commit, `live source_commit mismatch: ${live.source_commit}`);
   assert(JSON.stringify(live.assets) === JSON.stringify(approved.assets), 'live manifest asset list/hashes differ from approved manifest');
   const comparisons = [];
@@ -440,7 +443,11 @@ async function manifestChecks(manifestPath, baseUrl) {
     const localHash = await sha256(await readFile(resolve(localRoot, asset)));
     const response = await fetch(new URL(asset, baseUrl), { cache: 'no-store' });
     assert(response.ok, `live asset fetch failed for ${asset}: HTTP ${response.status}`);
-    const liveHash = await sha256(Buffer.from(await response.arrayBuffer()));
+    const liveAssetBytes = Buffer.from(await response.arrayBuffer());
+    const liveHash = await sha256(liveAssetBytes);
+    const preservedPath = join(evidence, 'live-assets', asset);
+    await mkdir(resolve(preservedPath, '..'), { recursive: true });
+    await writeFile(preservedPath, liveAssetBytes);
     comparisons.push({ path: asset, expected_sha256: expected, local_sha256: localHash, live_sha256: liveHash, match: expected === localHash && expected === liveHash });
     assert(expected === localHash, `approved local asset hash mismatch: ${asset}`);
     assert(expected === liveHash, `live asset hash mismatch: ${asset}`);
@@ -450,6 +457,27 @@ async function manifestChecks(manifestPath, baseUrl) {
     approvedBytes,
     liveBytes,
   };
+}
+
+async function emitEvidencePayload(evidence, result) {
+  const names = new Set(['result.json']);
+  for (const value of [result.hud_screenshot, ...result.cases.map(item => item.screenshot), result.turn_lifecycle?.screenshot]) {
+    if (value) names.add(relative(evidence, resolve(value)).replaceAll('\\', '/'));
+  }
+  if (result.manifest) {
+    names.add('live-build-manifest.json');
+    for (const comparison of result.manifest.comparisons) names.add(`live-assets/${comparison.path}`);
+  }
+  const files = [];
+  for (const path of [...names].sort()) {
+    assert(path && !path.startsWith('..') && !isAbsolute(path), `evidence path escapes directory: ${path}`);
+    const bytes = await readFile(join(evidence, path));
+    files.push({ path, size: bytes.length, sha256: await sha256(bytes) });
+  }
+  const payload = { schema: 'block-siege-preserved-evidence/v1', requirements: [...result.requirements].sort(), files };
+  const bytes = Buffer.from(`${JSON.stringify(payload, null, 2)}\n`);
+  await writeFile(join(evidence, 'evidence-payload.json'), bytes);
+  await writeFile(join(evidence, 'evidence-payload.sha256'), `${await sha256(bytes)}  evidence-payload.json\n`);
 }
 
 async function verifyDeploymentWorkflow(approvedBytes, liveBytes) {
@@ -531,7 +559,7 @@ async function main() {
     console.log('PASS coordinated-runtime-harness-corruption');
     return;
   }
-  const oracle = await extractApprovedKoreanOracle(options['oracle-spec']);
+  const oracle = options['oracle-spec'] ? await extractApprovedKoreanOracle(options['oracle-spec']) : null;
   let server = null, chrome = null, primaryError = null;
   const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], startup_attempts: [], server_readiness: null, workflow_result: options.serve ? 'local-not-applicable' : null };
   try {
@@ -543,7 +571,9 @@ async function main() {
     console.log('CASE hud');
     const initial = startup.initial;
     const runtime = await evaluate(initial.client, undefined, `globalThis.__BLOCK_SIEGE_TEST__.snapshot()`);
-    await utf8Checks(options.serve, runtime, oracle); result.runtime_hud = runtime.hud_strings; result.approved_korean_strings = runtime.approved_korean_strings; result.oracle_spec = resolve(options['oracle-spec']);
+    if (oracle) await utf8Checks(options.serve, runtime, oracle);
+    result.runtime_hud = runtime.hud_strings; result.approved_korean_strings = runtime.approved_korean_strings;
+    if (options['oracle-spec']) result.oracle_spec = resolve(options['oracle-spec']);
     const png = await initial.client.send('Page.captureScreenshot', { format: 'png' });
     result.hud_screenshot = join(evidence, 'hud.png'); await writeFile(result.hud_screenshot, Buffer.from(png.data, 'base64'));
     await chrome.cdp.send('Target.closeTarget', { targetId: initial.targetId });
@@ -562,7 +592,7 @@ async function main() {
     for (const c of cases.filter(c => c.shot_count)) { assert(c.shot_id >= 0 && c.initial_velocity.length === 3 && c.impulse_magnitude > 0 && c.normalized_direction.length === 3, `${c.name}: incomplete launch telemetry`); }
     if (result.requirements.includes('REQ-017')) result.turn_lifecycle = await turnLifecycleCase(chrome.cdp, options['base-url'], evidence);
     if (result.requirements.includes('REQ-014')) {
-      const checkedManifest = await manifestChecks(options.manifest, options['base-url']);
+      const checkedManifest = await manifestChecks(options.manifest, options['base-url'], evidence);
       result.manifest = checkedManifest.evidence;
       if (!options.serve) result.workflow_result = await verifyDeploymentWorkflow(checkedManifest.approvedBytes, checkedManifest.liveBytes);
     }
@@ -578,6 +608,7 @@ async function main() {
       }
     }
     await writeFile(join(evidence, 'result.json'), JSON.stringify(result, null, 2));
+    await emitEvidencePayload(evidence, result);
   }
   console.log(`${result.verdict}: ${result.cases.length} browser cases; evidence ${join(evidence, 'result.json')}`);
 }

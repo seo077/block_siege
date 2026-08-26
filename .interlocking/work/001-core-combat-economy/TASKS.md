@@ -554,3 +554,4 @@
 ## Execution log (continued)
 
 - 2026-08-26: T-029 done; approved-SPEC oracle extraction and coordinated-corruption rejection passed the exact 11-case Chrome command, transitive core dependency closure plus indirect-helper/autoload negative fixture passed, and REQ-005 proved immutable per-block stable baselines and exact collapse thresholds.
+- 2026-08-26: T-030 done; deterministic preserved-evidence payloads and offline authentication passed REQ-014/017 local browser reruns plus all 18 external-root, Sigstore, identity, ancestry, manifest, digest, evidence, screenshot, asset, and lifecycle negative cases.

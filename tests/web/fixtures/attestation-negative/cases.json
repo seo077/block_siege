@@ -1,0 +1,8 @@
+{
+  "schema": "block-siege-attestation-negative/v1",
+  "cases": [
+    "signature", "certificate-chain", "rekor-inclusion", "root-source", "root-hash", "root-origin", "repository", "workflow",
+    "ref", "ancestry", "attested-tree-manifest", "payload-digest", "evidence",
+    "screenshot", "asset-hash", "lifecycle-timeout", "lifecycle-enter", "lifecycle-turn"
+  ]
+}

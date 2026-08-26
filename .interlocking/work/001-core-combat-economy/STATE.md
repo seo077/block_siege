@@ -5,20 +5,20 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "8359aee0"
-next_action: "Implement T-030 authenticated offline deployment-evidence verification"
+next_action: "Implement T-031 attested deployment and independent final verification"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
-head_commit: "8e3c9e5"
-updated_at: "2026-08-25"
+head_commit: "fd4c68b"
+updated_at: "2026-08-26"
 ---
 
 # 001-core-combat-economy
 
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
-- Done: T-001 through T-029 implemented; approved-SPEC oracle, transitive core boundary, immutable baseline, and browser corruption rejection now pass.
-- Now: Implement T-030 authenticated offline deployment evidence so a network-restricted independent verifier can settle REQ-014/017.
+- Done: T-001 through T-030 implemented; authenticated offline deployment evidence, external trust-root enforcement, and 18 tamper-rejection paths now pass.
+- Now: Implement T-031 to attest and deploy the final evidence bundle, then run fresh independent verification.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -141,3 +141,4 @@ Candidate interlocking improvements:
 - 2026-08-25: Human judged the interlocking loop too slow and requested a durable record for later plugin revision; added the detailed retrospective and six concrete framework improvement candidates above without changing SPEC, criteria, or the pending G0 action.
 - 2026-08-25: Human typed `il approve`; G0 re-approved spec 8359aee0 and criteria 2829f5ce, unlocking code edits for the remaining verification-contract implementation.
 - 2026-08-26: Completed T-029; REQ-002/005 Godot tests, transitive core dependency boundary with indirect-helper/autoload rejection, exact local REQ-012/013 Chrome run, and coordinated runtime+harness oracle-corruption self-test all passed; next is T-030.
+- 2026-08-26: Completed T-030; deterministic evidence payloads, verifier-owned external Sigstore trust-root enforcement, REQ-014/017 local browser reruns, and all 18 tamper-rejection paths passed; next is T-031.

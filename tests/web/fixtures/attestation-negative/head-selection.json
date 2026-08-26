@@ -1,0 +1,19 @@
+{
+  "expectedHead": "1111111111111111111111111111111111111111",
+  "verificationResult": {
+    "signature": {
+      "certificate": {
+        "sourceRepositoryDigest": "1111111111111111111111111111111111111111",
+        "githubWorkflowSHA": "2222222222222222222222222222222222222222",
+        "buildSignerDigest": "3333333333333333333333333333333333333333"
+      }
+    },
+    "statement": {
+      "predicate": {
+        "materials": [
+          { "digest": { "sha1": "4444444444444444444444444444444444444444" } }
+        ]
+      }
+    }
+  }
+}

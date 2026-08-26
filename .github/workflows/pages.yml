@@ -91,5 +91,6 @@ jobs:
           path: |
             build/web-evidence/deployed/**
             build/web-evidence/deployed-e2e/**
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 90

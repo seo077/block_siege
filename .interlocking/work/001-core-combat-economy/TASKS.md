@@ -555,3 +555,28 @@
 
 - 2026-08-26: T-029 done; approved-SPEC oracle extraction and coordinated-corruption rejection passed the exact 11-case Chrome command, transitive core dependency closure plus indirect-helper/autoload negative fixture passed, and REQ-005 proved immutable per-block stable baselines and exact collapse thresholds.
 - 2026-08-26: T-030 done; deterministic preserved-evidence payloads and offline authentication passed REQ-014/017 local browser reruns plus all 18 external-root, Sigstore, identity, ancestry, manifest, digest, evidence, screenshot, asset, and lifecycle negative cases.
+- 2026-08-26: T-031 blocked after successful commit 46256b1, Pages run 32928912317, live REQ-014/017 browser evidence, and real `gh attestation verify`: the wrapper rejected the official trusted-root media type `application/vnd.dev.sigstore.trustedroot+json;version=0.1` before positive verification; appended T-032.
+
+## T-032 Accept official GitHub CLI trusted-root records in offline verification
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-030
+- produces: |
+    tests/web/verify_preserved_deployment.mjs
+      parseTrustedRootRecords(bytes) accepts the official GitHub CLI/Sigstore trusted-root media type and supported versioned records without weakening external-path, origin, SHA-256, signature, certificate-chain, or Rekor enforcement
+    tests/web/fixtures/attestation-negative/**
+      Trusted-root format fixtures cover the current official semicolon-version media type and retain malformed/unsupported rejection
+- verify:   Run both real T-031 offline positive commands with the freshly downloaded external trusted root, then rerun every T-030 negative self-test
+
+## T-033 Preserve hidden deployment assets in authenticated evidence artifacts
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-032
+- produces: |
+    .github/workflows/pages.yml
+      Authenticated deployment-evidence artifact upload preserves hidden manifest assets including `live-assets/.nojekyll`
+- verify:   A fresh Pages/attestation run succeeds, downloaded REQ-014/017 artifacts contain every payload-listed file including `.nojekyll`, and both offline positive commands pass
+
+- 2026-08-26: T-032 parser correction accepted the official external trusted root, then T-031 positive verification found the Actions artifact omitted payload-listed `live-assets/.nojekyll` because upload-artifact excludes hidden files by default; appended T-033.

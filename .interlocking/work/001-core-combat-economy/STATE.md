@@ -5,7 +5,7 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "8359aee0"
-next_action: "Implement T-031 attested deployment and independent final verification"
+next_action: "Implement T-033 hidden evidence-asset preservation, then resume T-031"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
@@ -18,7 +18,7 @@ updated_at: "2026-08-26"
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
 - Done: T-001 through T-030 implemented; authenticated offline deployment evidence, external trust-root enforcement, and 18 tamper-rejection paths now pass.
-- Now: Implement T-031 to attest and deploy the final evidence bundle, then run fresh independent verification.
+- Now: Preserve hidden evidence assets in T-033, then rerun T-031 deployment attestation and independent verification.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -142,3 +142,5 @@ Candidate interlocking improvements:
 - 2026-08-25: Human typed `il approve`; G0 re-approved spec 8359aee0 and criteria 2829f5ce, unlocking code edits for the remaining verification-contract implementation.
 - 2026-08-26: Completed T-029; REQ-002/005 Godot tests, transitive core dependency boundary with indirect-helper/autoload rejection, exact local REQ-012/013 Chrome run, and coordinated runtime+harness oracle-corruption self-test all passed; next is T-030.
 - 2026-08-26: Completed T-030; deterministic evidence payloads, verifier-owned external Sigstore trust-root enforcement, REQ-014/017 local browser reruns, and all 18 tamper-rejection paths passed; next is T-031.
+- 2026-08-26: T-031 deployment commit 46256b1 and Pages run 32928912317 succeeded with live REQ-014/017 evidence and real cryptographic verification, but the repository wrapper rejected the official semicolon-version trusted-root media type; appended corrective T-032 before resuming T-031.
+- 2026-08-26: T-032 accepted the official trusted root and retained 18 negative rejections; T-031 positive verification then proved the artifact upload omitted payload-listed hidden `.nojekyll`, so appended T-033 to preserve hidden evidence assets before re-attestation.

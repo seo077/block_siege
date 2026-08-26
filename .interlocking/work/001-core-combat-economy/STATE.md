@@ -5,7 +5,7 @@ phase: SPEC
 size: feature
 gates_passed: [G0]
 spec_sha256: "8359aee0"
-next_action: "Implement T-034 physical REQ-015/016 acceptance fixtures, then rerun independent verification"
+next_action: "Implement T-035 atomic preservation of authenticated evidence, then rerun final independent verification"
 blocked_on: ""
 open_assumptions: []
 last_verified_commit: "a6dea47"
@@ -18,7 +18,7 @@ updated_at: "2026-08-26"
 ## Resume brief
 - Goal: Deliver the fixed-scenario core combat loop with correct physical adjudication and a conserved 200-block economy.
 - Done: T-001 through T-030 implemented; authenticated offline deployment evidence, external trust-root enforcement, and 18 tamper-rejection paths now pass.
-- Now: Replace synthetic REQ-015/016 acceptance checks with required physical end-to-end fixtures in T-034, then rerun independent verification with the approved offline environment.
+- Now: Make failed deployed probes preserve authenticated evidence atomically in T-035, restore the attested artifact, then rerun final independent verification.
 - Watch: Godot emits sandbox-only user log and root certificate warnings, but headless requirement tests run and pass.
 - Watch: The original ACL-broken Git metadata is preserved at `.git-acl-backup-20260824` until the replacement repository is fully exercised.
 
@@ -145,3 +145,4 @@ Candidate interlocking improvements:
 - 2026-08-26: T-031 deployment commit 46256b1 and Pages run 32928912317 succeeded with live REQ-014/017 evidence and real cryptographic verification, but the repository wrapper rejected the official semicolon-version trusted-root media type; appended corrective T-032 before resuming T-031.
 - 2026-08-26: T-032 accepted the official trusted root and retained 18 negative rejections; T-031 positive verification then proved the artifact upload omitted payload-listed hidden `.nojekyll`, so appended T-033 to preserve hidden evidence assets before re-attestation.
 - 2026-08-26: T-033 re-attestation run 32950163716 and both authenticated offline positives passed, but fresh independent verification returned 13 PASS/4 FAIL: REQ-014/017 could not access the approved external verification environment and REQ-015/016 found synthetic/teleport fixture gaps; appended T-034 for the substantive acceptance gap.
+- 2026-08-26: T-034 raised independent coverage to 15/17; REQ-014/017 fallback then revealed failed network probes overwrite the preserved attested payload before offline verification, so appended T-035 for atomic evidence publication.

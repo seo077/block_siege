@@ -593,3 +593,15 @@
 - verify:   Run the exact REQ-015 and REQ-016 criteria commands and inspect every required named sample/subcase, then rerun independent acceptance verification
 
 - 2026-08-26: Fresh independent verification of a6dea47..2507b05 returned 13 PASS and REQ-014/015/016/017 FAIL; REQ-014/017 lacked verifier environment for the approved offline route, while REQ-015/016 exposed synthetic/teleport fixtures that did not prove the required physical samples and full boundary matrix; appended T-034 for the product-evidence gap.
+
+## T-035 Preserve authenticated evidence when a live verification probe fails
+
+- state:    todo
+- covers:   REQ-014, REQ-017
+- depends:  T-034
+- produces: |
+    tests/web/run_browser_regression.mjs
+      Live/deployed evidence is generated in an isolated staging directory and atomically published to the requested evidence path only on PASS, so policy denial or ordinary network/HTTP failure cannot overwrite previously authenticated preserved evidence
+- verify:   Seed known authenticated deployed/deployed-e2e payloads, run both deployed commands under explicit network denial, prove nonzero exit and byte-identical preserved payload/bundle/evidence trees, then run both offline positive commands and independent verification
+
+- 2026-08-26: Independent REQ-014/017 fallback exposed that a failed network-denied live probe overwrote authenticated `deployed*` payloads before offline verification, changing attested payload hashes 16e5dc/2c5bb4 to 91ee22/a432d9; appended T-035 for atomic evidence preservation.

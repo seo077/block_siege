@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
-import { readFile, mkdir, writeFile, mkdtemp, rm, stat } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, mkdtemp, rm, stat, rename } from 'node:fs/promises';
 import { createReadStream, existsSync } from 'node:fs';
-import { resolve, join, extname, relative, isAbsolute } from 'node:path';
+import { resolve, join, extname, relative, isAbsolute, dirname, basename } from 'node:path';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
@@ -459,10 +459,10 @@ async function manifestChecks(manifestPath, baseUrl, evidence) {
   };
 }
 
-async function emitEvidencePayload(evidence, result) {
+async function emitEvidencePayload(evidence, result, reportedEvidence = evidence) {
   const names = new Set(['result.json']);
   for (const value of [result.hud_screenshot, ...result.cases.map(item => item.screenshot), result.turn_lifecycle?.screenshot]) {
-    if (value) names.add(relative(evidence, resolve(value)).replaceAll('\\', '/'));
+    if (value) names.add(relative(reportedEvidence, resolve(value)).replaceAll('\\', '/'));
   }
   if (result.manifest) {
     names.add('live-build-manifest.json');
@@ -529,9 +529,11 @@ async function verifyDeploymentWorkflow(approvedBytes, liveBytes) {
   throw new Error(`no completed successful pages.yml master run has a raw manifest exactly matching approved and live manifests: ${JSON.stringify(mismatches)}`);
 }
 
-async function main() {
-  const options = args(process.argv), evidence = resolve(options.evidence);
-  await mkdir(evidence, { recursive: true });
+function reportEvidencePath(path, evidence, reportedEvidence) {
+  return path ? join(reportedEvidence, relative(evidence, path)) : path;
+}
+
+async function runRegression(options, evidence, reportedEvidence = evidence) {
   if (options['negative-oracle-self-test']) {
     assert(options['negative-oracle-self-test'] === 'coordinated-runtime-harness-corruption', 'unknown negative oracle self-test');
     const nestedEvidence = join(evidence, 'nested-corruption');
@@ -553,11 +555,9 @@ async function main() {
       child.once('exit', code => resolveNested({ code, stdout, stderr }));
     });
     assert(nested.code !== 0, `coordinated corruption was incorrectly accepted: ${nested.stdout}`);
-    const nestedResult = JSON.parse(await readFile(join(nestedEvidence, 'result.json'), 'utf8'));
-    assert(nestedResult.verdict === 'FAIL' && nestedResult.errors.some(error => error.includes('approved Korean oracle mismatch')), 'nested failure was not the unchanged SPEC oracle rejection');
-    await writeFile(join(evidence, 'result.json'), JSON.stringify({ verdict: 'PASS', self_test: options['negative-oracle-self-test'], nested_exit_code: nested.code, nested_result: join(nestedEvidence, 'result.json') }, null, 2));
-    console.log('PASS coordinated-runtime-harness-corruption');
-    return;
+    assert(nested.stderr.includes('approved Korean oracle mismatch'), 'nested failure was not the unchanged SPEC oracle rejection');
+    await writeFile(join(evidence, 'result.json'), JSON.stringify({ verdict: 'PASS', self_test: options['negative-oracle-self-test'], nested_exit_code: nested.code }, null, 2));
+    return { verdict: 'PASS', cases: [], message: 'PASS coordinated-runtime-harness-corruption' };
   }
   const oracle = options['oracle-spec'] ? await extractApprovedKoreanOracle(options['oracle-spec']) : null;
   let server = null, chrome = null, primaryError = null;
@@ -607,14 +607,62 @@ async function main() {
       try { await cleanup(); }
       catch (error) {
         result.errors.push(error.stack || String(error));
-        process.exitCode = 1;
         if (!primaryError) primaryError = error;
       }
     }
+    result.hud_screenshot = reportEvidencePath(result.hud_screenshot, evidence, reportedEvidence);
+    for (const item of result.cases) item.screenshot = reportEvidencePath(item.screenshot, evidence, reportedEvidence);
+    if (result.turn_lifecycle) result.turn_lifecycle.screenshot = reportEvidencePath(result.turn_lifecycle.screenshot, evidence, reportedEvidence);
     await writeFile(join(evidence, 'result.json'), JSON.stringify(result, null, 2));
-    await emitEvidencePayload(evidence, result);
+    await emitEvidencePayload(evidence, result, reportedEvidence);
   }
-  console.log(`${result.verdict}: ${result.cases.length} browser cases; evidence ${join(evidence, 'result.json')}`);
+  return result;
+}
+
+function assertScopedEvidencePath(path) {
+  const parent = dirname(path);
+  assert(path !== parent && basename(path) && basename(path) !== '.' && basename(path) !== '..', `unsafe evidence directory: ${path}`);
+  return parent;
+}
+
+async function publishEvidence(staging, requested) {
+  const parent = assertScopedEvidencePath(requested);
+  assert(dirname(staging) === parent && staging !== requested, 'evidence staging directory must be an isolated sibling');
+  const backup = join(parent, `.${basename(requested)}-previous-${process.pid}-${Date.now()}`);
+  let hadPrevious = false;
+  try {
+    await rename(requested, backup);
+    hadPrevious = true;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+  try {
+    await rename(staging, requested);
+  } catch (error) {
+    if (hadPrevious) await rename(backup, requested);
+    throw error;
+  }
+  if (hadPrevious) {
+    try { await rm(backup, { recursive: true, force: true }); }
+    catch (error) { console.warn(`PASS evidence published; previous-tree cleanup deferred at ${backup}: ${error.message}`); }
+  }
+}
+
+async function main() {
+  const options = args(process.argv), requested = resolve(options.evidence);
+  const parent = assertScopedEvidencePath(requested);
+  await mkdir(parent, { recursive: true });
+  const staging = await mkdtemp(join(parent, `.${basename(requested)}-staging-`));
+  let published = false;
+  try {
+    const result = await runRegression(options, staging, requested);
+    assert(result.verdict === 'PASS' && !result.errors?.length, result.errors?.[0] || 'browser regression did not pass');
+    await publishEvidence(staging, requested);
+    published = true;
+    console.log(result.message || `${result.verdict}: ${result.cases.length} browser cases; evidence ${join(requested, 'result.json')}`);
+  } finally {
+    if (!published) await rm(staging, { recursive: true, force: true });
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main().catch(error => { console.error(error); process.exitCode = 1; });

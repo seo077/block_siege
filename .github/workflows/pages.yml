@@ -9,6 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  attestations: write
   contents: read
   pages: write
   id-token: write
@@ -34,3 +35,61 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  attest-evidence:
+    name: Preserve and attest deployed browser evidence
+    needs: deploy
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Capture deployed REQ-014 evidence
+        shell: pwsh
+        run: >-
+          node tests/web/run_browser_regression.mjs
+          --base-url https://seo077.github.io/block_siege/
+          --requirements REQ-012,REQ-013,REQ-014
+          --manifest build/web/build-manifest.json
+          --evidence build/web-evidence/deployed
+          --oracle-spec .interlocking/work/001-core-combat-economy/SPEC.md
+
+      - name: Capture deployed REQ-017 lifecycle evidence
+        shell: pwsh
+        run: >-
+          node tests/web/run_browser_regression.mjs
+          --base-url https://seo077.github.io/block_siege/
+          --requirements REQ-015,REQ-016,REQ-017
+          --manifest build/web/build-manifest.json
+          --evidence build/web-evidence/deployed-e2e
+
+      - name: Attest exact REQ-014 evidence payload
+        id: attest-req014
+        uses: actions/attest@v4
+        with:
+          subject-path: build/web-evidence/deployed/evidence-payload.json
+
+      - name: Attest exact REQ-017 evidence payload
+        id: attest-req017
+        uses: actions/attest@v4
+        with:
+          subject-path: build/web-evidence/deployed-e2e/evidence-payload.json
+
+      - name: Preserve attestation bundles with their payloads
+        shell: pwsh
+        run: |
+          Copy-Item -LiteralPath '${{ steps.attest-req014.outputs.bundle-path }}' -Destination 'build/web-evidence/deployed/attestation.sigstore.json'
+          Copy-Item -LiteralPath '${{ steps.attest-req017.outputs.bundle-path }}' -Destination 'build/web-evidence/deployed-e2e/attestation.sigstore.json'
+
+      - name: Publish authenticated deployment evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-deployment-evidence-${{ github.sha }}
+          path: |
+            build/web-evidence/deployed/**
+            build/web-evidence/deployed-e2e/**
+          if-no-files-found: error
+          retention-days: 90

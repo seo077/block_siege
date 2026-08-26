@@ -561,7 +561,11 @@ async function main() {
   }
   const oracle = options['oracle-spec'] ? await extractApprovedKoreanOracle(options['oracle-spec']) : null;
   let server = null, chrome = null, primaryError = null;
-  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: options.requirements.split(','), cases: [], errors: [], startup_attempts: [], server_readiness: null, workflow_result: options.serve ? 'local-not-applicable' : null };
+  const requestedRequirements = options.requirements.split(',');
+  const resultRequirements = options.manifest && !requestedRequirements.includes('REQ-014')
+    ? [...requestedRequirements, 'REQ-014']
+    : requestedRequirements;
+  const result = { verdict: 'FAIL', base_url: options['base-url'], requirements: resultRequirements, cases: [], errors: [], startup_attempts: [], server_readiness: null, workflow_result: options.serve ? 'local-not-applicable' : null };
   try {
     server = options.serve ? await serve(options.serve, options['base-url']) : null;
     result.server_readiness = await diagnoseServerReadiness(server, options['base-url']);
@@ -591,7 +595,7 @@ async function main() {
     assert(Math.sign(by['player-1'].normalized_direction[2]) === -Math.sign(by['player-2'].normalized_direction[2]), 'camera-relative lateral semantics differ');
     for (const c of cases.filter(c => c.shot_count)) { assert(c.shot_id >= 0 && c.initial_velocity.length === 3 && c.impulse_magnitude > 0 && c.normalized_direction.length === 3, `${c.name}: incomplete launch telemetry`); }
     if (result.requirements.includes('REQ-017')) result.turn_lifecycle = await turnLifecycleCase(chrome.cdp, options['base-url'], evidence);
-    if (result.requirements.includes('REQ-014')) {
+    if (options.manifest) {
       const checkedManifest = await manifestChecks(options.manifest, options['base-url'], evidence);
       result.manifest = checkedManifest.evidence;
       if (!options.serve) result.workflow_result = await verifyDeploymentWorkflow(checkedManifest.approvedBytes, checkedManifest.liveBytes);
